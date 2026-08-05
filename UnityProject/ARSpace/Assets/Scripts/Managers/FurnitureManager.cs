@@ -17,11 +17,19 @@ public class FurnitureManager : MonoBehaviour
 
     public void SelectFurniture(int index)
     {
-        selectedFurniture = furnitureDatabase.GetItem(index);
+        FurnitureItem item = furnitureDatabase.GetItem(index);
+
+        if (item != null)
+        {
+            selectedFurniture = item;
+        }
     }
 
     public GameObject GetSelectedPrefab()
     {
-        return selectedFurniture != null ? selectedFurniture.prefab : null;
+        if (selectedFurniture == null)
+            return null;
+
+        return selectedFurniture.prefab;
     }
 }
