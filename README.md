@@ -58,6 +58,15 @@ ARSpace is an enterprise-grade Android AR application built with Unity 6, AR Fou
    - `ShadowReceiver.shader`: Transparent ground shadow receiver rendering soft contact shadows under 3D furniture to visually anchor them on real office floors.
    - `PresentationModeController`: Executive one-tap presentation mode hiding UI chrome and plane grids with double-tap restore.
 
+9. **Automated Testing & Project Validation (Phase 9):**
+   - Comprehensive EditMode unit test suite in `Assets/Tests/Editor/`:
+     - `FurnitureDatabaseTests`: $O(1)$ lookup, category queries, and ID integrity.
+     - `LayoutPersistenceTests`: JSON serialization, preset loading, and tolerant deserialization.
+     - `SpaceAnalyticsTests`: Floor calculation, circulation ratios, density thresholds, and division by zero safety.
+     - `ServiceLocatorTests`: Service registration, retrieval, and lifecycle management.
+     - `AnchorClusteringTests`: Spatial clustering threshold ($1.5\text{ m}$) and 20-anchor cap enforcement.
+   - `ARSpaceProjectValidator`: 35+ automated validation checks covering Android build settings, XR subsystem configuration, shaders, persistence, analytics, and test runners.
+
 ---
 
 ## Layout Persistence & Origin Architecture

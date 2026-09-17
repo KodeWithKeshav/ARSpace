@@ -125,6 +125,42 @@ namespace ARSpace.Editor.Validation
 
             // Phase 8: Polish, UX & Performance
             CheckPolishAndUX();
+
+            // Phase 9: Automated Test Suite
+            CheckTests();
+        }
+
+        void CheckTests()
+        {
+            bool testAsmExists = AssetDatabase.LoadAssetAtPath<UnityEditorInternal.AssemblyDefinitionAsset>(
+                "Assets/Tests/Editor/ARSpace.Tests.Editor.asmdef") != null;
+            Check("ARSpace.Tests.Editor.asmdef exists", testAsmExists,
+                "Missing Assets/Tests/Editor/ARSpace.Tests.Editor.asmdef");
+
+            bool dbTestsExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Tests/Editor/FurnitureDatabaseTests.cs") != null;
+            Check("FurnitureDatabaseTests.cs exists", dbTestsExists,
+                "Missing Assets/Tests/Editor/FurnitureDatabaseTests.cs");
+
+            bool persistTestsExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Tests/Editor/LayoutPersistenceTests.cs") != null;
+            Check("LayoutPersistenceTests.cs exists", persistTestsExists,
+                "Missing Assets/Tests/Editor/LayoutPersistenceTests.cs");
+
+            bool analyticsTestsExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Tests/Editor/SpaceAnalyticsTests.cs") != null;
+            Check("SpaceAnalyticsTests.cs exists", analyticsTestsExists,
+                "Missing Assets/Tests/Editor/SpaceAnalyticsTests.cs");
+
+            bool serviceLocatorTestsExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Tests/Editor/ServiceLocatorTests.cs") != null;
+            Check("ServiceLocatorTests.cs exists", serviceLocatorTestsExists,
+                "Missing Assets/Tests/Editor/ServiceLocatorTests.cs");
+
+            bool anchorTestsExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Tests/Editor/AnchorClusteringTests.cs") != null;
+            Check("AnchorClusteringTests.cs exists", anchorTestsExists,
+                "Missing Assets/Tests/Editor/AnchorClusteringTests.cs");
         }
 
         void CheckPolishAndUX()
