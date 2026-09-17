@@ -110,6 +110,45 @@ namespace ARSpace.Editor.Validation
 
             // Phase 3: Catalogue Data Layer
             CheckCatalogue();
+
+            // Phase 4: Placement Pipeline
+            CheckPlacementPipeline();
+        }
+
+        void CheckPlacementPipeline()
+        {
+            bool arPlacementManagerExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/AR/ARPlacementManager.cs") != null;
+            Check("ARPlacementManager.cs exists", arPlacementManagerExists,
+                "Missing Assets/Scripts/AR/ARPlacementManager.cs");
+
+            bool reticleExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/Placement/PlacementReticle.cs") != null;
+            Check("PlacementReticle.cs exists", reticleExists,
+                "Missing Assets/Scripts/Placement/PlacementReticle.cs");
+
+            bool anchorServiceExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/Placement/AnchorService.cs") != null;
+            Check("AnchorService.cs exists", anchorServiceExists,
+                "Missing Assets/Scripts/Placement/AnchorService.cs");
+
+            bool registryExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/Placement/PlacedObjectRegistry.cs") != null;
+            Check("PlacedObjectRegistry.cs exists", registryExists,
+                "Missing Assets/Scripts/Placement/PlacedObjectRegistry.cs");
+
+            bool catalogServiceExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/Furniture/CatalogService.cs") != null;
+            Check("CatalogService.cs exists", catalogServiceExists,
+                "Missing Assets/Scripts/Furniture/CatalogService.cs");
+
+            bool oldPlacementGone = !System.IO.File.Exists("Assets/Scripts/AR/Placement.cs");
+            Check("Obsolete Placement.cs deleted", oldPlacementGone,
+                "Assets/Scripts/AR/Placement.cs should be deleted");
+
+            bool oldTapToPlaceGone = !System.IO.File.Exists("Assets/Scripts/AR/TapToPlace.cs");
+            Check("Obsolete TapToPlace.cs deleted", oldTapToPlaceGone,
+                "Assets/Scripts/AR/TapToPlace.cs should be deleted");
         }
 
         void CheckCatalogue()
