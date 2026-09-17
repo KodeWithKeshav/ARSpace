@@ -119,6 +119,27 @@ namespace ARSpace.Editor.Validation
 
             // Phase 6: Layout Persistence
             CheckLayoutPersistence();
+
+            // Phase 7: Space Utilization Analysis
+            CheckSpaceAnalytics();
+        }
+
+        void CheckSpaceAnalytics()
+        {
+            bool floorCalcExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/Analysis/FloorAreaCalculator.cs") != null;
+            Check("FloorAreaCalculator.cs exists", floorCalcExists,
+                "Missing Assets/Scripts/Analysis/FloorAreaCalculator.cs");
+
+            bool spaceServiceExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/Analysis/SpaceAnalyticsService.cs") != null;
+            Check("SpaceAnalyticsService.cs exists", spaceServiceExists,
+                "Missing Assets/Scripts/Analysis/SpaceAnalyticsService.cs");
+
+            bool analyticsPanelExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/UI/AnalyticsPanel.cs") != null;
+            Check("AnalyticsPanel.cs exists", analyticsPanelExists,
+                "Missing Assets/Scripts/UI/AnalyticsPanel.cs");
         }
 
         void CheckLayoutPersistence()

@@ -46,6 +46,12 @@ ARSpace is an enterprise-grade Android AR application built with Unity 6, AR Fou
    - Built-in office presets: *Open Plan Team Pod (24 Seats)*, *Hybrid Team Zone (16 Seats)*, *Executive Floor & Boardroom (22 Seats)*.
    - Tolerant deserialization: cleanly ignores missing catalogue IDs without crashing.
 
+7. **Space Utilization Analysis & CRE Dashboard (Phase 7):**
+   - `FloorAreaCalculator`: Accurately computes non-overlapping usable room square meterage using 2D spatial occupancy grid sampling over detected floor planes.
+   - `SpaceAnalyticsService`: Live calculation of footprint area vs circulation egress ratio, seating density per 100 m², category footprint breakdown, and clearance conflict counts.
+   - Compliance scoring: Real-time badges for egress compliance (Compliant $\ge 45\%$, Constrained $30-45\%$, Non-Compliant $<30\%$) and density health (Sparse $<8$, Optimal $8-14$, High-Density $14-20$, Overcrowded $>20$ seats / 100 m²).
+   - `AnalyticsPanel`: Executive dashboard UI with metric ($m^2$) and imperial ($sq\ ft$) toggling.
+
 ---
 
 ## Layout Persistence & Origin Architecture
