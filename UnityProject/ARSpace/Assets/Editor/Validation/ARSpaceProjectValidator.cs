@@ -104,6 +104,37 @@ namespace ARSpace.Editor.Validation
 
             // Scene in build list
             CheckSceneInBuildSettings();
+
+            // Phase 2: Plane Grid Visualizer
+            CheckPlaneVisualizer();
+        }
+
+        void CheckPlaneVisualizer()
+        {
+            bool gridShaderExists = AssetDatabase.LoadAssetAtPath<Shader>(
+                "Assets/Art/Shaders/PlaneGrid.shader") != null;
+            Check("PlaneGrid.shader exists", gridShaderExists,
+                "Missing Assets/Art/Shaders/PlaneGrid.shader");
+
+            bool lineShaderExists = AssetDatabase.LoadAssetAtPath<Shader>(
+                "Assets/Art/Shaders/UnlitLine.shader") != null;
+            Check("UnlitLine.shader exists", lineShaderExists,
+                "Missing Assets/Art/Shaders/UnlitLine.shader");
+
+            var gridMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Art/Materials/M_PlaneGrid.mat");
+            bool gridMatValid = gridMat != null && gridMat.shader != null && gridMat.shader.name == "ARSpace/PlaneGrid";
+            Check("M_PlaneGrid.mat configured with ARSpace/PlaneGrid", gridMatValid,
+                "Run ARSpace → Setup Plane Grid Assets to generate material");
+
+            var outlineMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Art/Materials/M_PlaneOutline.mat");
+            bool outlineMatValid = outlineMat != null && outlineMat.shader != null;
+            Check("M_PlaneOutline.mat configured", outlineMatValid,
+                "Run ARSpace → Setup Plane Grid Assets to generate outline material");
+
+            var planePrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Plane.prefab");
+            bool hasVisualizer = planePrefab != null && planePrefab.GetComponent<AR.PlaneGridVisualizer>() != null;
+            Check("Plane.prefab has PlaneGridVisualizer", hasVisualizer,
+                "Run ARSpace → Setup Plane Grid Assets to attach visualizer to Plane.prefab");
         }
 
         void CheckXRSettings()
@@ -239,6 +270,12 @@ namespace ARSpace.Editor.Validation
                 if (GUILayout.Button("Fix: Apply Android AR Build Settings", GUILayout.Height(28)))
                 {
                     BuildSettingsEnforcer.ApplySettings();
+                    RunAllChecks();
+                }
+
+                if (GUILayout.Button("Fix: Setup Plane Grid Assets", GUILayout.Height(28)))
+                {
+                    AssetBuilders.PlaneVisualizerBuilder.SetupPlaneGridAssets();
                     RunAllChecks();
                 }
             }
