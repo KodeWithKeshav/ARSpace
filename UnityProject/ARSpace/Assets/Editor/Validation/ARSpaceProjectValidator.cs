@@ -113,6 +113,37 @@ namespace ARSpace.Editor.Validation
 
             // Phase 4: Placement Pipeline
             CheckPlacementPipeline();
+
+            // Phase 5: Selection and Manipulation
+            CheckSelectionAndManipulation();
+        }
+
+        void CheckSelectionAndManipulation()
+        {
+            bool selectionServiceExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/Placement/ObjectSelectionService.cs") != null;
+            Check("ObjectSelectionService.cs exists", selectionServiceExists,
+                "Missing Assets/Scripts/Placement/ObjectSelectionService.cs");
+
+            bool selectionVisualExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/Placement/SelectionVisual.cs") != null;
+            Check("SelectionVisual.cs exists", selectionVisualExists,
+                "Missing Assets/Scripts/Placement/SelectionVisual.cs");
+
+            bool gestureRouterExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/Placement/GestureRouter.cs") != null;
+            Check("GestureRouter.cs exists", gestureRouterExists,
+                "Missing Assets/Scripts/Placement/GestureRouter.cs");
+
+            bool manipulatorExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/Placement/ObjectManipulator.cs") != null;
+            Check("ObjectManipulator.cs exists", manipulatorExists,
+                "Missing Assets/Scripts/Placement/ObjectManipulator.cs");
+
+            bool selectionToolbarExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/UI/SelectionToolbar.cs") != null;
+            Check("SelectionToolbar.cs exists", selectionToolbarExists,
+                "Missing Assets/Scripts/UI/SelectionToolbar.cs");
         }
 
         void CheckPlacementPipeline()

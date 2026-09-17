@@ -6,7 +6,7 @@ namespace ARSpace.Placement
 {
     /// <summary>
     /// Component attached to the root of every instantiated workplace furniture item.
-    /// Manages the object's identity, item reference, bounds, selection state, and transform tracking.
+    /// Manages identity, catalogue metadata link, bounds, selection, lock status, and visual tinting.
     /// </summary>
     [SelectionBase]
     [DisallowMultipleComponent]
@@ -27,11 +27,18 @@ namespace ARSpace.Placement
         BoxCollider m_BoxCollider;
 
         bool m_IsSelected = false;
+        bool m_IsLocked = false;
+        bool m_HasConflict = false;
+
+        MaterialPropertyBlock m_PropertyBlock;
+        static readonly int s_BaseColorId = Shader.PropertyToID("_BaseColor");
 
         public string InstanceId => m_InstanceId;
         public FurnitureItem Item => m_FurnitureItem;
         public BoxCollider Collider => m_BoxCollider;
         public bool IsSelected => m_IsSelected;
+        public bool IsLocked => m_IsLocked;
+        public bool HasConflict => m_HasConflict;
 
         /// <summary>
         /// World bounds of this object computed from its box collider or renderers.
@@ -73,6 +80,8 @@ namespace ARSpace.Placement
             {
                 m_Renderers = GetComponentsInChildren<Renderer>(true);
             }
+
+            m_PropertyBlock = new MaterialPropertyBlock();
         }
 
         /// <summary>
@@ -85,12 +94,43 @@ namespace ARSpace.Placement
         }
 
         /// <summary>
-        /// Toggles selection highlight state.
+        /// Toggles selection state.
         /// </summary>
         public void SetSelected(bool selected)
         {
             m_IsSelected = selected;
-            // Visual affordance or outline can be driven here or via ObjectSelectionService
+        }
+
+        /// <summary>
+        /// Toggles lock state (preventing accidental translation gestures).
+        /// </summary>
+        public void SetLocked(bool locked)
+        {
+            m_IsLocked = locked;
+        }
+
+        /// <summary>
+        /// Tints the object during drag manipulation if its footprint conflicts with another object.
+        /// </summary>
+        public void SetConflictTint(bool conflict)
+        {
+            if (m_HasConflict == conflict) return;
+            m_HasConflict = conflict;
+
+            if (m_Renderers == null) return;
+
+            Color tint = conflict ? new Color(1.0f, 0.42f, 0.05f, 0.75f) : Color.white;
+
+            for (int i = 0; i < m_Renderers.Length; i++)
+            {
+                var r = m_Renderers[i];
+                if (r != null)
+                {
+                    r.GetPropertyBlock(m_PropertyBlock);
+                    m_PropertyBlock.SetColor(s_BaseColorId, tint);
+                    r.SetPropertyBlock(m_PropertyBlock);
+                }
+            }
         }
 
         /// <summary>
