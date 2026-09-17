@@ -1,35 +1,45 @@
 using UnityEngine;
+using ARSpace.Furniture;
 
-public class FurnitureManager : MonoBehaviour
+namespace ARSpace.Managers
 {
-    [Header("Furniture Database")]
-    [SerializeField] private FurnitureDatabase furnitureDatabase;
-
-    private FurnitureItem selectedFurniture;
-
-    private void Start()
+    /// <summary>
+    /// Legacy manager for catalogue selection.
+    /// In Phase 4, catalogue selection will be managed via GameEvents.FurnitureSelected.
+    /// </summary>
+    public class FurnitureManager : MonoBehaviour
     {
-        if (furnitureDatabase != null && furnitureDatabase.furnitureItems.Count > 0)
+        [Header("Furniture Database")]
+        [SerializeField] private FurnitureDatabase furnitureDatabase;
+
+        private FurnitureItem selectedFurniture;
+
+        private void Start()
         {
-            selectedFurniture = furnitureDatabase.GetItem(0);
+            if (furnitureDatabase != null && furnitureDatabase.Count > 0)
+            {
+                selectedFurniture = furnitureDatabase.GetItem(0);
+            }
         }
-    }
 
-    public void SelectFurniture(int index)
-    {
-        FurnitureItem item = furnitureDatabase.GetItem(index);
-
-        if (item != null)
+        public void SelectFurniture(int index)
         {
-            selectedFurniture = item;
+            if (furnitureDatabase == null)
+                return;
+
+            FurnitureItem item = furnitureDatabase.GetItem(index);
+            if (item != null)
+            {
+                selectedFurniture = item;
+            }
         }
-    }
 
-    public GameObject GetSelectedPrefab()
-    {
-        if (selectedFurniture == null)
-            return null;
+        public GameObject GetSelectedPrefab()
+        {
+            if (selectedFurniture == null)
+                return null;
 
-        return selectedFurniture.prefab;
+            return selectedFurniture.Prefab;
+        }
     }
 }

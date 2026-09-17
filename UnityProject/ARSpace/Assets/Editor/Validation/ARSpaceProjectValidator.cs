@@ -107,6 +107,47 @@ namespace ARSpace.Editor.Validation
 
             // Phase 2: Plane Grid Visualizer
             CheckPlaneVisualizer();
+
+            // Phase 3: Catalogue Data Layer
+            CheckCatalogue();
+        }
+
+        void CheckCatalogue()
+        {
+            var db = AssetDatabase.LoadAssetAtPath<Furniture.FurnitureDatabase>(
+                "Assets/ScriptableObjects/FurnitureDatabase.asset");
+
+            Check("FurnitureDatabase asset exists", db != null,
+                "Run ARSpace → Rebuild Furniture Catalogue");
+
+            if (db != null)
+            {
+                Check($"Catalogue has items ({db.Count} registered)", db.Count > 0,
+                    "Catalogue is empty. Run ARSpace → Rebuild Furniture Catalogue.");
+
+                int missingPrefabs = 0;
+                int missingThumbnails = 0;
+                int missingIds = 0;
+                var seenIds = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+                int duplicates = 0;
+
+                foreach (var item in db.Items)
+                {
+                    if (item == null) continue;
+                    if (string.IsNullOrEmpty(item.Id)) missingIds++;
+                    else if (!seenIds.Add(item.Id)) duplicates++;
+
+                    if (item.Prefab == null) missingPrefabs++;
+                    if (item.Thumbnail == null) missingThumbnails++;
+                }
+
+                Check("All catalogue items have valid prefabs", missingPrefabs == 0,
+                    $"{missingPrefabs} items missing prefabs");
+                Check("All catalogue items have thumbnails", missingThumbnails == 0,
+                    $"{missingThumbnails} items missing thumbnails");
+                Check("All catalogue items have unique IDs", missingIds == 0 && duplicates == 0,
+                    $"{missingIds} missing IDs, {duplicates} duplicate IDs");
+            }
         }
 
         void CheckPlaneVisualizer()
@@ -276,6 +317,12 @@ namespace ARSpace.Editor.Validation
                 if (GUILayout.Button("Fix: Setup Plane Grid Assets", GUILayout.Height(28)))
                 {
                     AssetBuilders.PlaneVisualizerBuilder.SetupPlaneGridAssets();
+                    RunAllChecks();
+                }
+
+                if (GUILayout.Button("Fix: Rebuild Furniture Catalogue", GUILayout.Height(28)))
+                {
+                    AssetBuilders.FurnitureAssetBuilder.RebuildCatalogue();
                     RunAllChecks();
                 }
             }
