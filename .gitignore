@@ -1,3 +1,4 @@
+# Unity generated
 [Ll]ibrary/
 [Tt]emp/
 [Oo]bj/
@@ -6,18 +7,29 @@
 [Ll]ogs/
 UserSettings/
 MemoryCaptures/
+.utmp/
 
+# IDE / solution files
 *.csproj
 *.unityproj
 *.sln
+*.slnx
 *.suo
 *.user
 *.userprefs
 *.pidb
 *.booproj
-
+.vs/
 .vscode/
 .idea/
 
+# Asset Store tools
+/[Aa]ssets/AssetStoreTools*
+
+# Crashlytics
+crashlytics-build.properties
+sysinfo.txt
+
+# OS junk
 .DS_Store
 Thumbs.db
