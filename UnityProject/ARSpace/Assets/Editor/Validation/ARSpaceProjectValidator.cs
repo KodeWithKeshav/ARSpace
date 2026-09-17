@@ -122,6 +122,32 @@ namespace ARSpace.Editor.Validation
 
             // Phase 7: Space Utilization Analysis
             CheckSpaceAnalytics();
+
+            // Phase 8: Polish, UX & Performance
+            CheckPolishAndUX();
+        }
+
+        void CheckPolishAndUX()
+        {
+            bool coachExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/UI/OnboardingCoach.cs") != null;
+            Check("OnboardingCoach.cs exists", coachExists,
+                "Missing Assets/Scripts/UI/OnboardingCoach.cs");
+
+            bool lightBinderExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/AR/LightEstimationBinder.cs") != null;
+            Check("LightEstimationBinder.cs exists", lightBinderExists,
+                "Missing Assets/Scripts/AR/LightEstimationBinder.cs");
+
+            bool presControllerExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/UI/PresentationModeController.cs") != null;
+            Check("PresentationModeController.cs exists", presControllerExists,
+                "Missing Assets/Scripts/UI/PresentationModeController.cs");
+
+            bool shadowShaderExists = AssetDatabase.LoadAssetAtPath<Shader>(
+                "Assets/Art/Shaders/ShadowReceiver.shader") != null;
+            Check("ShadowReceiver.shader exists", shadowShaderExists,
+                "Missing Assets/Art/Shaders/ShadowReceiver.shader");
         }
 
         void CheckSpaceAnalytics()

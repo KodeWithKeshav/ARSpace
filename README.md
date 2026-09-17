@@ -52,6 +52,12 @@ ARSpace is an enterprise-grade Android AR application built with Unity 6, AR Fou
    - Compliance scoring: Real-time badges for egress compliance (Compliant $\ge 45\%$, Constrained $30-45\%$, Non-Compliant $<30\%$) and density health (Sparse $<8$, Optimal $8-14$, High-Density $14-20$, Overcrowded $>20$ seats / 100 m²).
    - `AnalyticsPanel`: Executive dashboard UI with metric ($m^2$) and imperial ($sq\ ft$) toggling.
 
+8. **Visual Polish, Lighting & Presentation Mode (Phase 8):**
+   - `OnboardingCoach`: Step-by-step contextual guidance (Floor sweep -> Placement -> Manipulation & Inspection).
+   - `LightEstimationBinder`: Smoothly binds AR camera light estimation (brightness, color temperature, spherical harmonics) to scene directional light and ambient probes without flickering.
+   - `ShadowReceiver.shader`: Transparent ground shadow receiver rendering soft contact shadows under 3D furniture to visually anchor them on real office floors.
+   - `PresentationModeController`: Executive one-tap presentation mode hiding UI chrome and plane grids with double-tap restore.
+
 ---
 
 ## Layout Persistence & Origin Architecture
