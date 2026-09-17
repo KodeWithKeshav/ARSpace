@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "1.0",
+  "layoutId": "preset_open_plan_24seat",
+  "layoutName": "Open Plan Team Pod (24 Seats)",
+  "createdAt": "2026-01-01T00:00:00Z",
+  "modifiedAt": "2026-01-01T00:00:00Z",
+  "recordedFloorArea": 120.0,
+  "totalSeatingCapacity": 24,
+  "entries": [
+    {
+      "instanceId": "cube_01",
+      "furnitureItemId": "cre_workstations_cubicle_3",
+      "localPosition": { "x": -2.8, "y": 0.0, "z": 2.2 },
+      "localRotation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
+      "localScale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+      "anchorGroupId": "",
+      "isLocked": false
+    },
+    {
+      "instanceId": "cube_02",
+      "furnitureItemId": "cre_workstations_cubicle_3",
+      "localPosition": { "x": 2.8, "y": 0.0, "z": 2.2 },
+      "localRotation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
+      "localScale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+      "anchorGroupId": "",
+      "isLocked": false
+    },
+    {
+      "instanceId": "cube_03",
+      "furnitureItemId": "cre_workstations_cubicle_3",
+      "localPosition": { "x": -2.8, "y": 0.0, "z": -2.2 },
+      "localRotation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
+      "localScale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+      "anchorGroupId": "",
+      "isLocked": false
+    },
+    {
+      "instanceId": "cube_04",
+      "furnitureItemId": "cre_workstations_cubicle_3",
+      "localPosition": { "x": 2.8, "y": 0.0, "z": -2.2 },
+      "localRotation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
+      "localScale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+      "anchorGroupId": "",
+      "isLocked": false
+    },
+    {
+      "instanceId": "printer_01",
+      "furnitureItemId": "cre_equipment_printer_1",
+      "localPosition": { "x": 0.0, "y": 0.0, "z": 4.0 },
+      "localRotation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
+      "localScale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+      "anchorGroupId": "",
+      "isLocked": false
+    },
+    {
+      "instanceId": "water_01",
+      "furnitureItemId": "cre_equipment_water_unit_1",
+      "localPosition": { "x": 0.0, "y": 0.0, "z": -4.0 },
+      "localRotation": { "x": 0.0, "y": 1.0, "z": 0.0, "w": 0.0 },
+      "localScale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+      "anchorGroupId": "",
+      "isLocked": false
+    },
+    {
+      "instanceId": "wb_01",
+      "furnitureItemId": "cre_equipment_white_board_1",
+      "localPosition": { "x": -5.5, "y": 0.0, "z": 0.0 },
+      "localRotation": { "x": 0.0, "y": 0.7071068, "z": 0.0, "w": 0.7071068 },
+      "localScale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+      "anchorGroupId": "",
+      "isLocked": false
+    },
+    {
+      "instanceId": "wb_02",
+      "furnitureItemId": "cre_equipment_white_board_1",
+      "localPosition": { "x": 5.5, "y": 0.0, "z": 0.0 },
+      "localRotation": { "x": 0.0, "y": -0.7071068, "z": 0.0, "w": 0.7071068 },
+      "localScale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+      "anchorGroupId": "",
+      "isLocked": false
+    }
+  ]
+}

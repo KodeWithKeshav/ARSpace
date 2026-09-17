@@ -116,6 +116,47 @@ namespace ARSpace.Editor.Validation
 
             // Phase 5: Selection and Manipulation
             CheckSelectionAndManipulation();
+
+            // Phase 6: Layout Persistence
+            CheckLayoutPersistence();
+        }
+
+        void CheckLayoutPersistence()
+        {
+            bool modelExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/Persistence/LayoutModel.cs") != null;
+            Check("LayoutModel.cs exists", modelExists,
+                "Missing Assets/Scripts/Persistence/LayoutModel.cs");
+
+            bool storageExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/Persistence/LayoutStorage.cs") != null;
+            Check("LayoutStorage.cs exists", storageExists,
+                "Missing Assets/Scripts/Persistence/LayoutStorage.cs");
+
+            bool originManagerExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/Persistence/LayoutOriginManager.cs") != null;
+            Check("LayoutOriginManager.cs exists", originManagerExists,
+                "Missing Assets/Scripts/Persistence/LayoutOriginManager.cs");
+
+            bool menuPanelExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/UI/LayoutMenuPanel.cs") != null;
+            Check("LayoutMenuPanel.cs exists", menuPanelExists,
+                "Missing Assets/Scripts/UI/LayoutMenuPanel.cs");
+
+            bool preset1Exists = AssetDatabase.LoadAssetAtPath<TextAsset>(
+                "Assets/Resources/LayoutPresets/open_plan_24seat.json") != null;
+            Check("Preset: Open Plan 24-Seat exists", preset1Exists,
+                "Missing Assets/Resources/LayoutPresets/open_plan_24seat.json");
+
+            bool preset2Exists = AssetDatabase.LoadAssetAtPath<TextAsset>(
+                "Assets/Resources/LayoutPresets/hybrid_team_zone.json") != null;
+            Check("Preset: Hybrid Team Zone exists", preset2Exists,
+                "Missing Assets/Resources/LayoutPresets/hybrid_team_zone.json");
+
+            bool preset3Exists = AssetDatabase.LoadAssetAtPath<TextAsset>(
+                "Assets/Resources/LayoutPresets/executive_floor.json") != null;
+            Check("Preset: Executive Floor exists", preset3Exists,
+                "Missing Assets/Resources/LayoutPresets/executive_floor.json");
         }
 
         void CheckSelectionAndManipulation()

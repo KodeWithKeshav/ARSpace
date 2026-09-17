@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "1.0",
+  "layoutId": "preset_executive_floor",
+  "layoutName": "Executive Floor & Boardroom (22 Seats)",
+  "createdAt": "2026-01-01T00:00:00Z",
+  "modifiedAt": "2026-01-01T00:00:00Z",
+  "recordedFloorArea": 160.0,
+  "totalSeatingCapacity": 22,
+  "entries": [
+    {
+      "instanceId": "exec_ceo",
+      "furnitureItemId": "cre_executivecabins_ceo_office",
+      "localPosition": { "x": -4.5, "y": 0.0, "z": 2.5 },
+      "localRotation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
+      "localScale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+      "anchorGroupId": "",
+      "isLocked": true
+    },
+    {
+      "instanceId": "exec_cabin",
+      "furnitureItemId": "cre_executivecabins_cabin_1",
+      "localPosition": { "x": -4.5, "y": 0.0, "z": -2.5 },
+      "localRotation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
+      "localScale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+      "anchorGroupId": "",
+      "isLocked": false
+    },
+    {
+      "instanceId": "exec_board",
+      "furnitureItemId": "cre_conferencetables_conf_desk_4",
+      "localPosition": { "x": 2.5, "y": 0.0, "z": 1.0 },
+      "localRotation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
+      "localScale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+      "anchorGroupId": "",
+      "isLocked": false
+    },
+    {
+      "instanceId": "exec_recep",
+      "furnitureItemId": "cre_reception_recep_1",
+      "localPosition": { "x": 0.0, "y": 0.0, "z": -4.0 },
+      "localRotation": { "x": 0.0, "y": 1.0, "z": 0.0, "w": 0.0 },
+      "localScale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+      "anchorGroupId": "",
+      "isLocked": false
+    },
+    {
+      "instanceId": "exec_couch_1",
+      "furnitureItemId": "cre_reception_couch_1",
+      "localPosition": { "x": -2.2, "y": 0.0, "z": -4.0 },
+      "localRotation": { "x": 0.0, "y": 0.7071068, "z": 0.0, "w": 0.7071068 },
+      "localScale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+      "anchorGroupId": "",
+      "isLocked": false
+    },
+    {
+      "instanceId": "exec_couch_2",
+      "furnitureItemId": "cre_reception_couch_1",
+      "localPosition": { "x": 2.2, "y": 0.0, "z": -4.0 },
+      "localRotation": { "x": 0.0, "y": -0.7071068, "z": 0.0, "w": 0.7071068 },
+      "localScale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+      "anchorGroupId": "",
+      "isLocked": false
+    },
+    {
+      "instanceId": "exec_cabinet",
+      "furnitureItemId": "cre_equipment_cabinet_1",
+      "localPosition": { "x": -4.5, "y": 0.0, "z": 0.0 },
+      "localRotation": { "x": 0.0, "y": 0.7071068, "z": 0.0, "w": 0.7071068 },
+      "localScale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+      "anchorGroupId": "",
+      "isLocked": false
+    }
+  ]
+}
