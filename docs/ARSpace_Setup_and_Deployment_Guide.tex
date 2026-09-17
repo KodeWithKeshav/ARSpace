@@ -1,0 +1,455 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{tcolorbox}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{microtype}
+\usepackage{amsmath}
+
+% Color Definitions
+\definecolor{primaryblue}{RGB}{14, 90, 160}
+\definecolor{accentorange}{RGB}{230, 95, 10}
+\definecolor{darkgray}{RGB}{45, 52, 54}
+\definecolor{lightgray}{RGB}{245, 246, 250}
+\definecolor{codebg}{RGB}{240, 242, 245}
+\definecolor{successgreen}{RGB}{39, 174, 96}
+
+% Hyperlink Configuration
+\hypersetup{
+    colorlinks=true,
+    linkcolor=primaryblue,
+    filecolor=primaryblue,      
+    urlcolor=primaryblue,
+    citecolor=primaryblue
+}
+
+% Code Listing Configuration
+\lstset{
+    backgroundcolor=\color{codebg},
+    basicstyle=\ttfamily\small\color{darkgray},
+    keywordstyle=\bfseries\color{primaryblue},
+    commentstyle=\itshape\color{gray},
+    stringstyle=\color{accentorange},
+    frame=single,
+    framesep=4pt,
+    rulecolor=\color{lightgray},
+    breaklines=true,
+    showstringspaces=false,
+    tabsize=2
+}
+
+% Header and Footer
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\color{gray}\small ARSpace Setup \& Deployment Guide}
+\lhead{\color{gray}\small Commercial Real Estate AR Platform}
+\cfoot{\thepage}
+
+% Section formatting
+\titleformat{\section}
+  {\normalfont\Large\bfseries\color{primaryblue}}{\thesection}{1em}{}
+\titleformat{\subsection}
+  {\normalfont\large\bfseries\color{darkgray}}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}
+  {\normalfont\normalsize\bfseries\color{darkgray}}{\thesubsubsection}{1em}{}
+
+\begin{document}
+
+% Title Block
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+    
+    {\Huge\bfseries\color{primaryblue} ARSpace: Augmented Reality Platform}\\[0.4cm]
+    {\LARGE\bfseries Commercial Real Estate Layout Visualization}\\[1.5cm]
+    
+    \textbf{\Large Comprehensive Technical Manual}\\[0.3cm]
+    {\large Unity 6 Setup, Project Configuration, Testing, and Android Deployment}\\[2cm]
+    
+    \begin{tcolorbox}[colback=lightgray,colframe=primaryblue,width=0.9\textwidth,arc=4mm]
+        \centering
+        \textbf{Document Version:} 1.0.0 \\
+        \textbf{Target Platform:} Android (ARCore / ARM64 / OpenGLES3) \\
+        \textbf{Engine Version:} Unity 6 (6000.5.6f1) / URP 17.5.0 / AR Foundation 6.5.0 \\
+        \textbf{Repository Branch:} \texttt{feature/arspace-commercial-platform}
+    \end{tcolorbox}
+    
+    \vfill
+    {\large Prepared for Engineering, QA, and Deployment Teams}\\[0.5cm]
+    {\large \today}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% -------------------------------------------------------------
+\section{Executive Summary}
+% -------------------------------------------------------------
+\textbf{ARSpace} is an enterprise Augmented Reality (AR) application engineered for commercial real estate (CRE) brokers, workplace interior planners, and enterprise tenants. It facilitates real-time 3D spatial planning inside bare-shell corporate floor plates before construction begins.
+
+The application incorporates an enterprise architectural pattern centered around:
+\begin{itemize}[noitemsep]
+    \item \textbf{Decoupled Event Bus (\texttt{GameEvents})}: Complete separation of user interface and AR subsystems.
+    \item \textbf{Central Registry (\texttt{ServiceLocator})}: Lifecycle-managed services accessible across layers.
+    \item \textbf{Spatial Anchor Clustering (\texttt{AnchorService})}: Groups items within 1.5\,m under native AR anchors to respect ARCore resource limits.
+    \item \textbf{De-Duplicated Floor Area Calculation (\texttt{FloorAreaCalculator})}: 2D spatial grid sampling (0.25\,m resolution) that prevents overlap double-counting.
+    \item \textbf{Origin-Relative Persistence (\texttt{LayoutOriginManager})}: Offline layout serialization restored at any physical floor location.
+    \item \textbf{Executive Presentation Mode (\texttt{PresentationModeController})}: Immersion toggle for uncluttered client walkthroughs.
+\end{itemize}
+
+---
+
+% -------------------------------------------------------------
+\section{System Requirements and Prerequisites}
+% -------------------------------------------------------------
+
+\subsection{Workstation Development Environment}
+\begin{itemize}
+    \item \textbf{Operating System:} macOS 13+ (Apple Silicon or Intel) or Windows 11 (64-bit).
+    \item \textbf{Unity Hub:} Latest version (3.8.0 or newer).
+    \item \textbf{Unity Editor:} Version \textbf{6000.5.6f1} (Unity 6).
+    \item \textbf{Unity Build Modules Required:}
+    \begin{itemize}[noitemsep]
+        \item \texttt{Android Build Support}
+        \item \texttt{Android SDK \& NDK Tools}
+        \item \texttt{OpenJDK}
+    \end{itemize}
+\end{itemize}
+
+\subsection{Target Android Device Requirements}
+\begin{itemize}
+    \item \textbf{Hardware:} ARCore-certified Android device (e.g., Google Pixel 4+, Samsung Galaxy S10+, OnePlus 7+, etc.).
+    \item \textbf{Operating System:} Android 8.0 (Oreo / API level 26) or higher.
+    \item \textbf{CPU Architecture:} 64-bit ARM (\texttt{arm64-v8a}).
+    \item \textbf{Google Play Services for AR:} Installed and updated to the latest version via the Google Play Store.
+    \item \textbf{Hardware Connection:} USB-C to USB-A/C data cable supporting ADB debugging.
+\end{itemize}
+
+---
+
+% -------------------------------------------------------------
+\section{Repository Setup and Initial Project Load}
+% -------------------------------------------------------------
+
+\subsection{Cloning the Project}
+Open terminal and clone the repository, switching to the verified feature branch:
+\begin{lstlisting}[language=bash]
+# Clone repository
+git clone https://github.com/KodeWithKeshav/ARSpace.git
+cd ARSpace
+
+# Check out the complete, production-ready feature branch
+git checkout feature/arspace-commercial-platform
+\end{lstlisting}
+
+\subsection{Opening in Unity Hub}
+\begin{enumerate}
+    \item Launch \textbf{Unity Hub}.
+    \item Navigate to \textbf{Projects} $\rightarrow$ click \textbf{Add} $\rightarrow$ \textbf{Add project from disk}.
+    \item Select the inner Unity project directory:
+    \begin{lstlisting}[language=bash]
+    ARSpace/UnityProject/ARSpace
+    \end{lstlisting}
+    \item Verify that the Editor Version is set to \textbf{Unity 6 (6000.5.6f1)}.
+    \item Click on the project name to launch the Editor.
+    \item Allow Unity several minutes on first launch to import assets, compile package caches, and index ScriptableObjects.
+\end{enumerate}
+
+---
+
+% -------------------------------------------------------------
+\section{Automated One-Click Project Configuration}
+% -------------------------------------------------------------
+To ensure zero manual configuration errors, ARSpace includes custom idempotent Editor builders exposed under the top menu bar: \textbf{\texttt{ARSpace}}.
+
+\begin{figure}[h!]
+\centering
+\begin{tcolorbox}[colback=white,colframe=primaryblue,title=\textbf{The ARSpace Editor Menu Hierarchy},arc=2mm]
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{\texttt{ARSpace $\rightarrow$ Validate Project}}: Comprehensive audit of all settings, assets, and shaders.
+    \item \textbf{\texttt{ARSpace $\rightarrow$ Apply Android AR Build Settings}}: One-click enforcer for IL2CPP, ARM64, and OpenGLES3.
+    \item \textbf{\texttt{ARSpace $\rightarrow$ Setup Plane Grid Assets}}: Generates materials and visualizer prefabs.
+    \item \textbf{\texttt{ARSpace $\rightarrow$ Rebuild Furniture Catalogue}}: Scans 52 3D models and builds runtime assets.
+\end{itemize}
+\end{tcolorbox}
+\end{figure}
+
+Execute the setup steps in the exact sequence described below:
+
+\subsection{Step 1: Enforce Android AR Build Settings}
+Select \textbf{\texttt{ARSpace $\rightarrow$ Apply Android AR Build Settings}}.
+This script executes \texttt{BuildSettingsEnforcer.cs} and automatically sets:
+\begin{itemize}[noitemsep]
+    \item Build Target: \texttt{Android}
+    \item Scripting Backend: \texttt{IL2CPP}
+    \item Target Architecture: \texttt{ARM64} (\texttt{AndroidArchitecture.ARM64})
+    \item Graphics API: \texttt{OpenGLES3} (Vulkan is explicitly disabled to prevent known driver crashes in ARCore on mid-range Mali/Adreno GPUs)
+    \item Colour Space: \texttt{Linear}
+    \item Minimum API Level: \texttt{26} (Android 8.0 Oreo)
+    \item Scene at Build Index 0: \texttt{Assets/Scenes/ARWorkspace.unity}
+\end{itemize}
+
+\subsection{Step 2: Generate Plane Grid Visualization Assets}
+Select \textbf{\texttt{ARSpace $\rightarrow$ Setup Plane Grid Assets}}.
+This generates:
+\begin{itemize}[noitemsep]
+    \item \texttt{Assets/Art/Materials/M\_PlaneGrid.mat} bound to \texttt{ARSpace/PlaneGrid.shader}.
+    \item \texttt{Assets/Art/Materials/M\_PlaneOutline.mat} bound to \texttt{ARSpace/UnlitLine.shader}.
+    \item Configures the \texttt{Plane.prefab} with \texttt{PlaneGridVisualizer} and \texttt{ARPlaneMeshVisualizer}.
+\end{itemize}
+
+\subsection{Step 3: Rebuild Furniture Catalogue}
+Select \textbf{\texttt{ARSpace $\rightarrow$ Rebuild Furniture Catalogue}}.
+This automated pipeline processes all 52 models in \texttt{Assets/Art/Models/}:
+\begin{enumerate}[noitemsep]
+    \item Normalizes 3D pivots to floor level ($Y = 0$).
+    \item Attaches \texttt{PlacedObject} and tight-fitting \texttt{BoxCollider}.
+    \item Renders 256$\times$256 offscreen studio preview thumbnails as sprites under \texttt{Assets/Art/Thumbnails/}.
+    \item Creates \texttt{FurnitureItem} ScriptableObjects with measured bounds, real-world footprints, clearance margins, and seating capacities.
+    \item Updates \texttt{Assets/ScriptableObjects/FurnitureDatabase.asset} with zero duplicate IDs.
+\end{enumerate}
+
+\subsection{Step 4: Execute Project Validator}
+Select \textbf{\texttt{ARSpace $\rightarrow$ Validate Project}}.
+A GUI window will display. Confirm that all 35+ verification checks display a green checkmark (\textcolor{successgreen}{\textbf{\checkmark}}):
+\begin{itemize}[noitemsep]
+    \item Build target, scripting backend, architecture, graphics API
+    \item URP asset, XR loader, AR session profile
+    \item Plane visualizer shaders and materials
+    \item Catalogue items and database lookup tables
+    \item Placement, selection, persistence, and space analytics scripts
+    \item Automated test runner assembly
+\end{itemize}
+
+---
+
+% -------------------------------------------------------------
+\section{Running and Testing in Unity Editor}
+% -------------------------------------------------------------
+
+\subsection{Opening the Main Scene}
+In the Project window, double-click:
+\begin{lstlisting}
+Assets/Scenes/ARWorkspace.unity
+\end{lstlisting}
+Verify that the scene hierarchy contains:
+\begin{itemize}[noitemsep]
+    \item \textbf{\texttt{ARSpaceApp}}: Core state machine coordinator.
+    \item \textbf{\texttt{XR Origin (XR Rig)}}: Contains \texttt{ARCamera}, \texttt{ARPlaneManager}, \texttt{ARAnchorManager}, and \texttt{ARRaycastManager}.
+    \item \textbf{\texttt{ServiceContainer}}: Holds \texttt{CatalogService}, \texttt{ARPlacementManager}, \texttt{ObjectSelectionService}, \texttt{LayoutOriginManager}, and \texttt{SpaceAnalyticsService}.
+    \item \textbf{\texttt{UI\_Canvas}}: Contains the Onboarding Coach, Reticle, Selection Toolbar, Layout Menu Panel, and Analytics Panel.
+\end{itemize}
+
+\subsection{Running the Automated Test Suite}
+ARSpace includes a comprehensive EditMode test suite.
+\begin{enumerate}
+    \item Open the Unity Test Runner via \textbf{Window $\rightarrow$ General $\rightarrow$ Test Runner}.
+    \item Select the \textbf{EditMode} tab.
+    \item Click \textbf{Run All}.
+    \item Verify that all test fixtures pass:
+    \begin{itemize}[noitemsep]
+        \item \texttt{FurnitureDatabaseTests}: $O(1)$ dictionary lookups, category filtering, case-insensitivity.
+        \item \texttt{LayoutPersistenceTests}: JSON serialization, preset loading, missing ID tolerance.
+        \item \texttt{SpaceAnalyticsTests}: Circulation ratios, seating density thresholds, zero-division safety.
+        \item \texttt{ServiceLocatorTests}: Register, retrieve, and lifecycle cleanup.
+        \item \texttt{AnchorClusteringTests}: 1.5\,m spatial cluster evaluation and 20-anchor cap enforcement.
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Simulating in Editor Play Mode}
+Click the \textbf{Play} button in Unity Editor.
+\begin{itemize}
+    \item Unity's XR Simulation subsystem will load a simulated room environment.
+    \item Move the camera using \texttt{W/A/S/D} keys and right-mouse button look.
+    \item The simulated floor plane will be detected, showing the orange anti-aliased grid and radar pulse.
+    \item Select an item from the catalogue drawer and left-click on the floor to test placement and manipulation.
+\end{itemize}
+
+---
+
+% -------------------------------------------------------------
+\section{Android Device Configuration}
+% -------------------------------------------------------------
+
+\subsection{Enabling Developer Options on Android}
+\begin{enumerate}
+    \item On your Android device, open \textbf{Settings $\rightarrow$ About phone}.
+    \item Scroll down to \textbf{Build number}.
+    \item Tap \textbf{Build number} rapidly \textbf{7 times} until you see the prompt: \textit{"You are now a developer!"}
+    \item Return to \textbf{Settings $\rightarrow$ System $\rightarrow$ Developer options}.
+    \item Enable the toggle for \textbf{Developer options}.
+    \item Scroll down and enable \textbf{USB debugging}.
+\end{enumerate}
+
+\subsection{Installing Google Play Services for AR (ARCore)}
+\begin{enumerate}
+    \item Open the \textbf{Google Play Store} on your Android device.
+    \item Search for \textbf{Google Play Services for AR}.
+    \item If not installed, tap \textbf{Install}. If already installed, tap \textbf{Update} to ensure compatibility with AR Foundation 6.5.
+\end{enumerate}
+
+\subsection{Verifying ADB Communication}
+Connect the device to your computer using a USB-C data cable. On your device, accept the prompt: \textit{"Allow USB debugging from this computer?"} (check \textit{"Always allow"}).
+
+Open a terminal on your computer and run:
+\begin{lstlisting}[language=bash]
+adb devices
+\end{lstlisting}
+Confirm that your device is listed with state \texttt{device}:
+\begin{lstlisting}
+List of devices attached
+1234567890ABCDEF    device
+\end{lstlisting}
+
+---
+
+% -------------------------------------------------------------
+\section{Building and Deploying to Android}
+% -------------------------------------------------------------
+
+\subsection{Method 1: Direct "Build and Run" (Recommended)}
+This method compiles the IL2CPP binaries, generates the APK, deploys it to the connected phone, and automatically launches the app.
+
+\begin{enumerate}
+    \item Connect your Android device via USB and verify ADB recognition.
+    \item In Unity Editor, open \textbf{File $\rightarrow$ Build Profiles} (or \textbf{Build Settings}).
+    \item Select \textbf{Android} platform.
+    \item In the \textbf{Run Device} dropdown, select your connected Android device model.
+    \item Verify that \texttt{Assets/Scenes/ARWorkspace.unity} is checked at index 0.
+    \item Click \textbf{Build and Run}.
+    \item Choose a location to save the output file (e.g., \texttt{ARSpace/builds/ARSpace.apk}).
+    \item Unity will compile the IL2CPP C++ code, pack the APK, install it over ADB, and launch the application on your phone.
+\end{enumerate}
+
+\subsection{Method 2: Standalone APK Export and Sideload}
+If building for distribution to clients or other team members:
+
+\begin{enumerate}
+    \item In Unity, open \textbf{File $\rightarrow$ Build Settings}.
+    \item Click \textbf{Build} (not Build and Run).
+    \item Save the file as \texttt{ARSpace\_Release.apk}.
+    \item Once the build completes, install it manually via command line:
+    \begin{lstlisting}[language=bash]
+    # Sideload the APK onto the connected Android device
+    adb install -r builds/ARSpace_Release.apk
+    \end{lstlisting}
+    \item The app icon labeled \textbf{ARSpace} will appear on the device home screen.
+\end{enumerate}
+
+---
+
+% -------------------------------------------------------------
+\section{In-App Mobile Operating Guide}
+% -------------------------------------------------------------
+
+When the application launches on your Android device, follow this walkthrough workflow:
+
+\subsection{1. Floor Mapping \& Room Onboarding}
+\begin{itemize}
+    \item When prompted, grant camera permissions.
+    \item The \textbf{Onboarding Coach} banner at the top reads: \textit{"Map Your Workspace: Slowly sweep your phone over the bare floor to detect surfaces."}
+    \item Pan the device camera smoothly across the room. Horizontal floor surfaces will light up with an anti-aliased 0.5\,m primary / 1.0\,m secondary grid and a subtle radar sweep.
+    \item Once $\ge 1.5\,\text{m}^2$ of floor is detected, the coach automatically advances to step 2.
+\end{itemize}
+
+\subsection{2. Catalogue Selection and Placement}
+\begin{itemize}
+    \item The bottom catalogue drawer categorizes items across 8 functional areas: Workstations, Cabins, Conference, Cafeteria, Reception, Partitions, Decor, and Equipment.
+    \item Tap any item thumbnail (e.g., \textbf{6-Person Team Pod Cubicle}).
+    \item Aim your device at the floor. The reticle will project the real-world rectangular footprint of the furniture item on the floor.
+    \item Tap the primary \textbf{Place} button (or tap directly on the reticle).
+    \item The furniture item instantiates at full 1:1 scale, automatically snapped to face the user, and parents to a clustered native AR anchor.
+\end{itemize}
+
+\subsection{3. Object Selection and Touch Manipulation}
+\begin{itemize}
+    \item \textbf{Selection:} Tap any placed furniture piece. An active boundary ring highlights the item's perimeter and its required circulation clearance margin.
+    \item \textbf{Translation (1-Finger Drag):} Drag the object across the floor. Translation is strictly constrained to the detected floor surface.
+    \item \textbf{Collision Feedback:} If you drag an object into another object's clearance boundary, both items dynamically tint orange, alerting you to circulation conflicts.
+    \item \textbf{Rotation (2-Finger Twist):} Twist with two fingers to rotate the item in place. Rotation features $5^\circ$ magnetic snapping for effortless alignment with office walls.
+    \item \textbf{Contextual Toolbar:} Floating above the selected item is a toolbar providing:
+    \begin{itemize}[noitemsep]
+        \item \textbf{Duplicate}: Spawns an identical item with identical rotation offset by 0.5\,m.
+        \item \textbf{Rotate 90$^\circ$}: Quick orthogonal orientation.
+        \item \textbf{Lock/Unlock}: Locks translation to prevent accidental touches during reviews.
+        \item \textbf{Delete}: Removes the item and cleanly de-allocates its native anchor.
+        \item \textbf{CRE Specs}: Displays item name, dimensions ($L \times W \times H$), and seat count.
+    \end{itemize}
+\end{itemize}
+
+\subsection{4. Commercial Space Analytics Dashboard}
+\begin{itemize}
+    \item Tap the \textbf{Analytics} tab to expand the live CRE dashboard bottom sheet.
+    \item \textbf{Usable Floor Area}: De-duplicated room square meterage calculated via 2D spatial occupancy grid sampling.
+    \item \textbf{Footprint vs. Circulation Ratio}: Live percentage of floor occupied by furniture vs. free egress space.
+    \item \textbf{Compliance Badges}:
+    \begin{itemize}[noitemsep]
+        \item \textcolor{successgreen}{\textbf{COMPLIANT ($\ge 45\%$)}}: Standard corporate accessibility and egress compliance.
+        \item \textcolor{accentorange}{\textbf{CONSTRAINED (30--45\%)}}: High-density team pod zoning.
+        \item \textcolor{red}{\textbf{NON-COMPLIANT ($< 30\%$)}}: Fire egress hazard alert.
+    \end{itemize}
+    \item \textbf{Seating Density}: Seats per 100\,m$^2$ with health categorization (Sparse, Optimal, High-Density, Overcrowded).
+    \item \textbf{Unit Toggle}: Tap the unit toggle button to instantly convert between \textbf{Metric (m$^2$)} and \textbf{Imperial (sq ft)}.
+\end{itemize}
+
+\subsection{5. Layout Persistence and Built-in Presets}
+\begin{itemize}
+    \item Open the \textbf{Layout Menu}.
+    \item \textbf{Saving Custom Layouts:} Enter a name (e.g., \texttt{"Tech\_Floor\_Plan"}) and tap \textbf{Save}. Layout coordinates are atomically written to local disk relative to the room's physical origin pose.
+    \item \textbf{Restoring Layouts:} Tap any saved layout or choose from the 3 built-in commercial templates:
+    \begin{enumerate}[noitemsep]
+        \item \textbf{Open Plan Team Pod (24 Seats)}: 4x 6-person cubicles, printers, water units, whiteboards.
+        \item \textbf{Hybrid Team Zone (16 Seats)}: Collaborative cubicles, phone booths, huddle desk, sofa.
+        \item \textbf{Executive Floor \& Boardroom (22 Seats)}: CEO suite, cabin, 12-person boardroom table, reception.
+    \end{enumerate}
+    \item The entire layout reconstructs instantly at your verified floor location.
+\end{itemize}
+
+\subsection{6. Executive Presentation Mode}
+\begin{itemize}
+    \item During formal client walkthroughs, tap the \textbf{Present} button.
+    \item All UI chrome, drawers, reticle, and plane grid lines are hidden, leaving an uninterrupted, photorealistic view of the office space.
+    \item Soft contact ground shadows render under furniture, anchored to real floor surfaces via \texttt{ShadowReceiver.shader}.
+    \item Real-time ambient lighting and directional light intensity adapt smoothly via \texttt{LightEstimationBinder}.
+    \item To exit, tap the subtle floating restore icon in the corner or \textbf{double-tap anywhere on the screen}.
+\end{itemize}
+
+---
+
+% -------------------------------------------------------------
+\section{Troubleshooting and Common Solutions}
+% -------------------------------------------------------------
+
+\begin{table}[h!]
+\centering
+\small
+\begin{tabular}{p{4.5cm} p{4.5cm} p{5.5cm}}
+\toprule
+\textbf{Symptom} & \textbf{Probable Cause} & \textbf{Resolution} \\
+\midrule
+App crashes immediately on launch with black screen. & Vulkan graphics API enabled or ARCore missing. & Run \texttt{ARSpace $\rightarrow$ Apply Android AR Build Settings} to enforce OpenGLES3. Ensure \textit{Google Play Services for AR} is updated. \\
+\addlinespace
+Floor planes take a long time to detect. & Low texture / glossy floor surface or poor lighting. & Pan device slowly in a figure-8 motion. Ensure room has adequate lighting and visible floor texture. \\
+\addlinespace
+\texttt{adb devices} shows \texttt{unauthorized}. & USB debugging RSA key not yet accepted on device. & Re-plug USB cable and tap \textit{"Always allow from this computer"} on the phone. \\
+\addlinespace
+Build fails with NDK or IL2CPP toolchain error. & Incomplete Android SDK/NDK installation. & Open Unity Hub $\rightarrow$ Installs $\rightarrow$ Unity 6 $\rightarrow$ Add Modules $\rightarrow$ check \textit{Android SDK \& NDK Tools} and \textit{OpenJDK}. \\
+\addlinespace
+Catalogue shows missing models or pink thumbnails. & Catalogue database has not been compiled. & In Unity Editor, execute \texttt{ARSpace $\rightarrow$ Rebuild Furniture Catalogue}. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\vfill
+\begin{center}
+\color{gray}\small --- End of ARSpace Technical Manual ---
+\end{center}
+
+\end{document}
