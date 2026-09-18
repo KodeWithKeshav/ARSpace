@@ -1,8 +1,11 @@
 ﻿<Solution>
-  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="ARSpace.Runtime.csproj" />
   <Project Path="Unity.XR.Interaction.Toolkit.Samples.StarterAssets.csproj" />
   <Project Path="Unity.XR.Interaction.Toolkit.Samples.ARStarterAssets.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="ARSpace.Tests.Editor.csproj" />
   <Project Path="Unity.XR.ARFoundation.PackageSamples.DebugVisualizers.csproj" />
+  <Project Path="ARSpace.Editor.csproj" />
   <Project Path="Unity.XR.Interaction.Toolkit.Samples.ARStarterAssets.Editor.csproj" />
   <Project Path="Unity.XR.Interaction.Toolkit.Samples.StarterAssets.Editor.csproj" />
   <Project Path="Unity.XR.ARFoundation.PackageSamples.DebugVisualizers.Editor.csproj" />

@@ -138,7 +138,7 @@ namespace ARSpace.Editor.AssetBuilders
             GameObject root = new GameObject(modelName);
             var placedObj = root.AddComponent<PlacedObject>();
 
-            GameObject modelInstance = Object.Instantiate(modelAsset, root.transform);
+            GameObject modelInstance = UnityEngine.Object.Instantiate(modelAsset, root.transform);
             modelInstance.name = "Model";
 
             // Normalise rotation so +Z faces front
@@ -193,7 +193,7 @@ namespace ARSpace.Editor.AssetBuilders
 
             // Save as prefab asset idempotently
             GameObject savedPrefab = PrefabUtility.SaveAsPrefabAsset(root, targetPrefabPath);
-            Object.DestroyImmediate(root);
+            UnityEngine.Object.DestroyImmediate(root);
 
             return savedPrefab;
         }
@@ -217,7 +217,7 @@ namespace ARSpace.Editor.AssetBuilders
 
             byte[] pngData = texture.EncodeToPNG();
             File.WriteAllBytes(targetPath, pngData);
-            Object.DestroyImmediate(texture);
+            UnityEngine.Object.DestroyImmediate(texture);
 
             AssetDatabase.ImportAsset(targetPath, ImportAssetOptions.ForceUpdate);
 
@@ -239,7 +239,7 @@ namespace ARSpace.Editor.AssetBuilders
         {
             if (prefab == null) return null;
 
-            GameObject tempInstance = Object.Instantiate(prefab);
+            GameObject tempInstance = UnityEngine.Object.Instantiate(prefab);
             tempInstance.hideFlags = HideFlags.HideAndDontSave;
 
             GameObject camGo = new GameObject("ThumbnailCam");
@@ -286,9 +286,9 @@ namespace ARSpace.Editor.AssetBuilders
                 cam.targetTexture = null;
                 RenderTexture.ReleaseTemporary(rt);
 
-                Object.DestroyImmediate(camGo);
-                Object.DestroyImmediate(lightGo);
-                Object.DestroyImmediate(tempInstance);
+                UnityEngine.Object.DestroyImmediate(camGo);
+                UnityEngine.Object.DestroyImmediate(lightGo);
+                UnityEngine.Object.DestroyImmediate(tempInstance);
             }
 
             return result;

@@ -133,7 +133,7 @@ namespace ARSpace.Placement
                 m_RaycastManager = FindFirstObjectByType<ARRaycastManager>();
 
             var app = ServiceLocator.Get<ARSpaceApp>();
-            bool isPlacementState = app != null && (app.CurrentState == AppState.Placement || app.CurrentState == AppState.Browsing);
+            bool isPlacementState = app != null && (app.CurrentState == AppState.PlacementPending || app.CurrentState == AppState.Browsing);
 
             if (!isPlacementState || m_RaycastManager == null || m_MainCamera == null)
             {

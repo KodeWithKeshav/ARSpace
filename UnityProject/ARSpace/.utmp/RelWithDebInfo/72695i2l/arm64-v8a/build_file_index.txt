@@ -1,2 +1,0 @@
-C:\Users\keshu\Desktop\ARSpace\UnityProject\ARSpace\Library\Bee\Android\Prj\IL2CPP\Gradle\unityLibrary\src\main\cpp\CMakeLists.txt
-C:\Users\keshu\Desktop\ARSpace\UnityProject\ARSpace\Library\Bee\Android\Prj\IL2CPP\Gradle\unityLibrary\src\main\cpp\GameActivity\CMakeLists.txt

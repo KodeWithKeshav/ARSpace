@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
+using UnityEditor.Build;
 
 namespace ARSpace.Editor.Validation
 {
@@ -70,8 +71,8 @@ namespace ARSpace.Editor.Validation
                 $"Current: {EditorUserBuildSettings.activeBuildTarget}");
 
             Check("Scripting backend: IL2CPP",
-                PlayerSettings.GetScriptingBackend(BuildTargetGroup.Android) == ScriptingImplementation.IL2CPP,
-                $"Current: {PlayerSettings.GetScriptingBackend(BuildTargetGroup.Android)}");
+                PlayerSettings.GetScriptingBackend(NamedBuildTarget.Android) == ScriptingImplementation.IL2CPP,
+                $"Current: {PlayerSettings.GetScriptingBackend(NamedBuildTarget.Android)}");
 
             Check("Target arch: ARM64 only",
                 PlayerSettings.Android.targetArchitectures == AndroidArchitecture.ARM64,
@@ -85,8 +86,8 @@ namespace ARSpace.Editor.Validation
                 glesOnly ? "Auto is on" : $"Current: {string.Join(", ", apis)}");
 
             Check("API compatibility: .NET Standard 2.1",
-                PlayerSettings.GetApiCompatibilityLevel(BuildTargetGroup.Android) == ApiCompatibilityLevel.NET_Standard_2_1,
-                $"Current: {PlayerSettings.GetApiCompatibilityLevel(BuildTargetGroup.Android)}");
+                PlayerSettings.GetApiCompatibilityLevel(NamedBuildTarget.Android) == ApiCompatibilityLevel.NET_Standard,
+                $"Current: {PlayerSettings.GetApiCompatibilityLevel(NamedBuildTarget.Android)}");
 
             Check("Min Android API ≥ 26",
                 PlayerSettings.Android.minSdkVersion >= AndroidSdkVersions.AndroidApiLevel26,

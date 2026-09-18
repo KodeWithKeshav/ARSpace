@@ -67,7 +67,7 @@ namespace ARSpace.Furniture
                 var app = ServiceLocator.Get<ARSpaceApp>();
                 if (app != null)
                 {
-                    app.RequestStateChange(AppState.Placement);
+                    app.RequestStateChange(AppState.PlacementPending);
                 }
             }
             else
@@ -80,7 +80,7 @@ namespace ARSpace.Furniture
         {
             m_SelectedItem = null;
             var app = ServiceLocator.Get<ARSpaceApp>();
-            if (app != null && app.CurrentState == AppState.Placement)
+            if (app != null && app.CurrentState == AppState.PlacementPending)
             {
                 app.RequestStateChange(AppState.Browsing);
             }

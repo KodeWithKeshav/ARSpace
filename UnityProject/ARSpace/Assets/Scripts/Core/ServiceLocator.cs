@@ -28,6 +28,25 @@ namespace ARSpace.Core
         }
 
         /// <summary>
+        /// Unregister a registered service by type.
+        /// </summary>
+        public static void Unregister<T>() where T : class
+        {
+            s_Services.Remove(typeof(T));
+        }
+
+        /// <summary>
+        /// Unregister a service instance if it matches the current registration.
+        /// </summary>
+        public static void Unregister<T>(T service) where T : class
+        {
+            if (s_Services.TryGetValue(typeof(T), out var existing) && existing == service)
+            {
+                s_Services.Remove(typeof(T));
+            }
+        }
+
+        /// <summary>
         /// Resolve a registered service. Returns null and logs an error if not found.
         /// </summary>
         public static T Get<T>() where T : class

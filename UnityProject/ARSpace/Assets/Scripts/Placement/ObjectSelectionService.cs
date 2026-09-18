@@ -66,7 +66,7 @@ namespace ARSpace.Placement
                 var app = ServiceLocator.Get<ARSpaceApp>();
                 if (app != null)
                 {
-                    app.RequestStateChange(AppState.Selected);
+                    app.RequestStateChange(AppState.ObjectSelected);
                 }
                 GameEvents.RaiseObjectSelectionChanged(m_SelectedObject.gameObject);
                 Debug.Log($"[ObjectSelectionService] Selected '{m_SelectedObject.name}'");
@@ -86,7 +86,7 @@ namespace ARSpace.Placement
             m_SelectedObject = null;
 
             var app = ServiceLocator.Get<ARSpaceApp>();
-            if (app != null && app.CurrentState == AppState.Selected)
+            if (app != null && app.CurrentState == AppState.ObjectSelected)
             {
                 app.RequestStateChange(AppState.Browsing);
             }

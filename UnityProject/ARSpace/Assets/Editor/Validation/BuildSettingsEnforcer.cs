@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEditor;
+using UnityEditor.Build;
 using System.Collections.Generic;
 
 namespace ARSpace.Editor.Validation
@@ -40,9 +41,9 @@ namespace ARSpace.Editor.Validation
             }
 
             // ── Scripting Backend ─────────────────────────────
-            if (PlayerSettings.GetScriptingBackend(BuildTargetGroup.Android) != ScriptingImplementation.IL2CPP)
+            if (PlayerSettings.GetScriptingBackend(NamedBuildTarget.Android) != ScriptingImplementation.IL2CPP)
             {
-                PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, ScriptingImplementation.IL2CPP);
+                PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
                 Debug.Log("[BuildSettingsEnforcer] Set scripting backend to IL2CPP.");
                 issuesFixed++;
             }
@@ -76,9 +77,9 @@ namespace ARSpace.Editor.Validation
             }
 
             // ── API Compatibility ─────────────────────────────
-            if (PlayerSettings.GetApiCompatibilityLevel(BuildTargetGroup.Android) != ApiCompatibilityLevel.NET_Standard_2_1)
+            if (PlayerSettings.GetApiCompatibilityLevel(NamedBuildTarget.Android) != ApiCompatibilityLevel.NET_Standard)
             {
-                PlayerSettings.SetApiCompatibilityLevel(BuildTargetGroup.Android, ApiCompatibilityLevel.NET_Standard_2_1);
+                PlayerSettings.SetApiCompatibilityLevel(NamedBuildTarget.Android, ApiCompatibilityLevel.NET_Standard);
                 Debug.Log("[BuildSettingsEnforcer] Set API compatibility to .NET Standard 2.1.");
                 issuesFixed++;
             }
@@ -119,7 +120,7 @@ namespace ARSpace.Editor.Validation
 
             // ── Multithreaded Rendering ───────────────────────
             // Disable multithreaded rendering for OpenGLES3 + AR (known stability issue)
-            PlayerSettings.SetMobileMTRendering(BuildTargetGroup.Android, false);
+            PlayerSettings.SetMobileMTRendering(NamedBuildTarget.Android, false);
 
             // ── Product Name ──────────────────────────────────
             if (PlayerSettings.productName != "ARSpace")

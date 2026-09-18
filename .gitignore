@@ -7,7 +7,7 @@
 [Ll]ogs/
 UserSettings/
 MemoryCaptures/
-.utmp/
+**/.utmp/
 
 # IDE / solution files
 *.csproj
