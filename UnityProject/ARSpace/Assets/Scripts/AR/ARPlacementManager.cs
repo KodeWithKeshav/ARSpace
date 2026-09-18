@@ -2,6 +2,9 @@ using System;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
+using UnityEngine.InputSystem.EnhancedTouch;
+using Touch = UnityEngine.InputSystem.EnhancedTouch.Touch;
+using TouchPhase = UnityEngine.InputSystem.TouchPhase;
 using ARSpace.Core;
 using ARSpace.Furniture;
 using ARSpace.Placement;
@@ -60,29 +63,34 @@ namespace ARSpace.AR
 
         void Update()
         {
-            // Optional tap on reticle support
-            if (m_AllowTapOnReticle && !m_IsPlacing && Input.touchCount > 0)
-            {
-                Touch touch = Input.GetTouch(0);
-                if (touch.phase == TouchPhase.Began)
-                {
-                    // Ensure touch is not over UI
-                    if (UnityEngine.EventSystems.EventSystem.current != null &&
-                        UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject(touch.fingerId))
-                    {
-                        return;
-                    }
+            // Optional tap on reticle support (uses the new Input System's enhanced touch,
+            // since this project has Active Input Handling set to "Input System Package (New)"
+            // and the legacy UnityEngine.Input class throws at runtime in that mode).
+            if (!m_AllowTapOnReticle || m_IsPlacing || Touch.activeTouches.Count == 0)
+                return;
 
-                    // Check if tap ray hits reticle bounds
-                    Ray ray = Camera.main.ScreenPointToRay(touch.position);
-                    if (Physics.Raycast(ray, out var hit, 10f))
-                    {
-                        if (hit.collider.transform == (m_Reticle != null ? m_Reticle.transform : null) ||
-                            hit.collider.GetComponentInParent<PlacementReticle>() != null)
-                        {
-                            PlaceCurrentItem();
-                        }
-                    }
+            Touch touch = Touch.activeTouches[0];
+            if (touch.phase != TouchPhase.Began)
+                return;
+
+            // Ensure touch is not over UI
+            if (UnityEngine.EventSystems.EventSystem.current != null &&
+                UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject(touch.finger.index))
+            {
+                return;
+            }
+
+            if (Camera.main == null)
+                return;
+
+            // Check if tap ray hits reticle bounds
+            Ray ray = Camera.main.ScreenPointToRay(touch.screenPosition);
+            if (Physics.Raycast(ray, out var hit, 10f))
+            {
+                if (hit.collider.transform == (m_Reticle != null ? m_Reticle.transform : null) ||
+                    hit.collider.GetComponentInParent<PlacementReticle>() != null)
+                {
+                    PlaceCurrentItem();
                 }
             }
         }
