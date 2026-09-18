@@ -2,7 +2,11 @@
     "name": "ARSpace.Editor",
     "rootNamespace": "ARSpace.Editor",
     "references": [
-        "ARSpace.Runtime"
+        "ARSpace.Runtime",
+        "Unity.XR.ARFoundation",
+        "Unity.XR.ARSubsystems",
+        "Unity.TextMeshPro",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [
         "Editor"

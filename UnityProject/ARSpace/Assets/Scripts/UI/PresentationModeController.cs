@@ -1,6 +1,9 @@
 using System;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem.EnhancedTouch;
+using Touch = UnityEngine.InputSystem.EnhancedTouch.Touch;
+using TouchPhase = UnityEngine.InputSystem.TouchPhase;
 using ARSpace.Core;
 
 namespace ARSpace.UI
@@ -52,6 +55,16 @@ namespace ARSpace.UI
             ServiceLocator.Unregister<PresentationModeController>();
         }
 
+        void OnEnable()
+        {
+            EnhancedTouchSupport.Enable();
+        }
+
+        void OnDisable()
+        {
+            EnhancedTouchSupport.Disable();
+        }
+
         void Update()
         {
             if (m_IsPresenting)
@@ -62,9 +75,9 @@ namespace ARSpace.UI
 
         void DetectDoubleTapExit()
         {
-            if (Input.touchCount == 1)
+            if (Touch.activeTouches.Count == 1)
             {
-                Touch t = Input.GetTouch(0);
+                Touch t = Touch.activeTouches[0];
                 if (t.phase == TouchPhase.Began)
                 {
                     float currentTime = Time.time;
