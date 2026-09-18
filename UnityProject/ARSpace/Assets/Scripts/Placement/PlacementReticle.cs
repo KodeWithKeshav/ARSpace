@@ -145,7 +145,15 @@ namespace ARSpace.Placement
             // Raycast from screen center (or touch drag position)
             Vector2 screenPoint = m_CustomScreenPosition ?? new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
 
-            if (m_RaycastManager.Raycast(screenPoint, s_Hits, TrackableType.PlaneWithinPolygon))
+            // Accept the plane's full tracked bounds/estimated extent, not just its (often still tiny,
+            // freshly-detected) boundary polygon — PlaneWithinPolygon alone routinely misses valid floor
+            // hits for the first several seconds of scanning, which reads to the user as "no floor found".
+            const TrackableType floorTrackables = TrackableType.PlaneWithinPolygon
+                | TrackableType.PlaneWithinBounds
+                | TrackableType.PlaneWithinInfinity
+                | TrackableType.PlaneEstimated;
+
+            if (m_RaycastManager.Raycast(screenPoint, s_Hits, floorTrackables))
             {
                 ARRaycastHit bestHit = default;
                 bool foundFloor = false;

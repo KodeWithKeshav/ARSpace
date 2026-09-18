@@ -55,6 +55,19 @@ namespace ARSpace.Editor.AssetBuilders
         const string OutlineMaterialPath = "Assets/Art/Materials/M_PlaneOutline.mat";
         const string DatabasePath = "Assets/ScriptableObjects/FurnitureDatabase.asset";
 
+        // ── Visual theme ───────────────────────────────────────
+        static readonly Color PanelBg = new Color(0.07f, 0.08f, 0.10f, 0.86f);
+        static readonly Color PrimaryColor = new Color(1.0f, 0.42f, 0.0f, 1f);
+        static readonly Color SecondaryColor = new Color(0.22f, 0.23f, 0.26f, 0.95f);
+        static readonly Color DangerColor = new Color(0.80f, 0.24f, 0.20f, 1f);
+        static readonly Color TextPrimary = Color.white;
+        static readonly Color TextMuted = new Color(0.75f, 0.77f, 0.82f, 1f);
+
+        static Sprite s_RoundedSprite;
+        static Sprite RoundedSprite => s_RoundedSprite != null
+            ? s_RoundedSprite
+            : (s_RoundedSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd"));
+
         static readonly HashSet<string> s_KeepRootNames = new HashSet<string>
         {
             "AR Session",
@@ -94,6 +107,7 @@ namespace ARSpace.Editor.AssetBuilders
             BuildManagersHierarchy(reticleGo);
             BuildEventSystem();
             BuildCanvas();
+            BuildDebugHud();
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
@@ -259,6 +273,18 @@ namespace ARSpace.Editor.AssetBuilders
         }
 
         // ── Canvas / UI ────────────────────────────────────────
+        //
+        // Bottom-up band layout (heights chosen so nothing overlaps):
+        //   Catalogue drawer     : 0   – 190
+        //   Selection toolbar    : 190 – 370   (hidden unless an object is selected)
+        //   Placement controls   : 370 – 500
+        //   Toast (floating)     : 520 – 610   (clear of every band above)
+        //   Guidance banner      : docked to the top edge
+
+        const float CatalogHeight = 190f;
+        const float ToolbarHeight = 180f;
+        const float PlacementHeight = 130f;
+        const float ToastY = 520f;
 
         static void BuildCanvas()
         {
@@ -277,30 +303,32 @@ namespace ARSpace.Editor.AssetBuilders
             // Top guidance banner ("Point your phone at the floor", "Too dark", ...)
             TextMeshProUGUI guidanceText = CreateBand(canvasT, "GuidanceBanner", top: true, y: 0, height: 110,
                 out RectTransform guidanceBandRect);
-            guidanceBandRect.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.55f);
-            guidanceText.fontSize = 34;
+            StyleImage(guidanceBandRect.GetComponent<Image>(), new Color(0f, 0f, 0f, 0.6f), rounded: false);
+            guidanceText.fontSize = 32;
+            guidanceText.fontStyle = FontStyles.Bold;
             guidanceText.alignment = TextAlignmentOptions.Center;
-            guidanceText.color = Color.white;
+            guidanceText.color = TextPrimary;
 
-            // Floating toast (short-lived confirmations / warnings)
+            // Floating toast (short-lived confirmations / warnings) — sits clear above every bottom band
             var toastGo = new GameObject("ToastPanel", typeof(RectTransform), typeof(CanvasGroup), typeof(Image));
             var toastRect = (RectTransform)toastGo.transform;
             toastRect.SetParent(canvasT, false);
             toastRect.anchorMin = new Vector2(0.5f, 0f);
             toastRect.anchorMax = new Vector2(0.5f, 0f);
             toastRect.pivot = new Vector2(0.5f, 0f);
-            toastRect.sizeDelta = new Vector2(900, 100);
-            toastRect.anchoredPosition = new Vector2(0, 420);
-            toastGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.8f);
+            toastRect.sizeDelta = new Vector2(920, 96);
+            toastRect.anchoredPosition = new Vector2(0, ToastY);
+            StyleImage(toastGo.GetComponent<Image>(), new Color(0.05f, 0.05f, 0.06f, 0.92f), rounded: true);
+            AddShadow(toastGo);
             var toastGroup = toastGo.GetComponent<CanvasGroup>();
             toastGroup.alpha = 0f;
-            TextMeshProUGUI toastText = CreateChildText(toastRect, "ToastText", 30, TextAlignmentOptions.Center, Color.white);
-            StretchFull(toastText.rectTransform);
+            TextMeshProUGUI toastText = CreateChildText(toastRect, "ToastText", 28, TextAlignmentOptions.Center, TextPrimary);
+            StretchFull(toastText.rectTransform, 24, 8);
 
-            // Bottom bands, stacked: catalogue (0-190) / selection toolbar (190-360) / place-cancel (360-480)
-            RectTransform catalogBand = BuildCatalogDrawer(canvasT, bottomY: 0, height: 190);
-            RectTransform toolbarBand = BuildSelectionToolbar(canvasT, bottomY: 190, height: 190);
-            RectTransform placementBand = BuildPlacementControls(canvasT, bottomY: 380, height: 130);
+            // Bottom bands, stacked bottom-up: catalogue / selection toolbar / place-cancel
+            BuildCatalogDrawer(canvasT, bottomY: 0, height: CatalogHeight);
+            BuildSelectionToolbar(canvasT, bottomY: CatalogHeight, height: ToolbarHeight);
+            BuildPlacementControls(canvasT, bottomY: CatalogHeight + ToolbarHeight, height: PlacementHeight);
 
             // Toast presenter wiring
             var toastPresenterGo = new GameObject("ToastPresenter");
@@ -311,16 +339,45 @@ namespace ARSpace.Editor.AssetBuilders
             AssignSerializedField(toastPresenter, "m_GuidanceText", guidanceText);
         }
 
-        static RectTransform BuildCatalogDrawer(Transform canvasT, float bottomY, float height)
+        static void BuildDebugHud()
+        {
+            var canvasGo = new GameObject("DebugHudCanvas", typeof(RectTransform));
+            var canvas = canvasGo.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 100;
+            var scaler = canvasGo.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1080, 1920);
+            scaler.matchWidthOrHeight = 0.5f;
+            canvasGo.AddComponent<GraphicRaycaster>();
+
+            var panelGo = new GameObject("DebugHud", typeof(RectTransform), typeof(Image), typeof(DebugHud));
+            var rect = (RectTransform)panelGo.transform;
+            rect.SetParent(canvasGo.transform, false);
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.sizeDelta = new Vector2(0, 56);
+            rect.anchoredPosition = new Vector2(0, -120);
+            StyleImage(panelGo.GetComponent<Image>(), new Color(0f, 0f, 0f, 0.5f), rounded: false);
+
+            TextMeshProUGUI text = CreateChildText(rect, "Text", 20, TextAlignmentOptions.Center, new Color(0.6f, 1f, 0.6f, 1f));
+            StretchFull(text.rectTransform, 12, 4);
+
+            var hud = panelGo.GetComponent<DebugHud>();
+            AssignSerializedField(hud, "m_Text", text);
+        }
+
+        static void BuildCatalogDrawer(Transform canvasT, float bottomY, float height)
         {
             var panelGo = new GameObject("CatalogDrawer", typeof(RectTransform), typeof(Image), typeof(CatalogPanel));
             RectTransform panelRect = ConfigureBottomBand(panelGo, canvasT, bottomY, height);
-            panelGo.GetComponent<Image>().color = new Color(0.08f, 0.08f, 0.09f, 0.85f);
+            StyleImage(panelGo.GetComponent<Image>(), PanelBg, rounded: false);
 
             var viewportGo = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask));
             var viewportRect = (RectTransform)viewportGo.transform;
             viewportRect.SetParent(panelRect, false);
-            StretchFull(viewportRect);
+            StretchFull(viewportRect, 0, 0);
             viewportGo.GetComponent<Image>().color = new Color(1, 1, 1, 0.01f);
             viewportGo.GetComponent<Mask>().showMaskGraphic = false;
 
@@ -339,8 +396,8 @@ namespace ARSpace.Editor.AssetBuilders
             contentRect.anchoredPosition = Vector2.zero;
 
             var layout = contentGo.AddComponent<HorizontalLayoutGroup>();
-            layout.padding = new RectOffset(20, 20, 20, 20);
-            layout.spacing = 16;
+            layout.padding = new RectOffset(24, 24, 20, 20);
+            layout.spacing = 18;
             layout.childForceExpandWidth = false;
             layout.childForceExpandHeight = true;
             layout.childAlignment = TextAnchor.MiddleLeft;
@@ -352,15 +409,14 @@ namespace ARSpace.Editor.AssetBuilders
 
             var catalogPanel = panelGo.GetComponent<CatalogPanel>();
             AssignSerializedField(catalogPanel, "m_Content", contentRect);
-
-            return panelRect;
+            AssignSerializedField(catalogPanel, "m_CardSprite", RoundedSprite);
         }
 
-        static RectTransform BuildSelectionToolbar(Transform canvasT, float bottomY, float height)
+        static void BuildSelectionToolbar(Transform canvasT, float bottomY, float height)
         {
             var panelGo = new GameObject("SelectionToolbar", typeof(RectTransform), typeof(Image), typeof(SelectionToolbar));
             RectTransform panelRect = ConfigureBottomBand(panelGo, canvasT, bottomY, height);
-            panelGo.GetComponent<Image>().color = new Color(0.10f, 0.10f, 0.12f, 0.9f);
+            StyleImage(panelGo.GetComponent<Image>(), PanelBg, rounded: false);
 
             // Info row (top half)
             var infoGo = new GameObject("InfoRow", typeof(RectTransform), typeof(HorizontalLayoutGroup));
@@ -368,16 +424,17 @@ namespace ARSpace.Editor.AssetBuilders
             infoRect.SetParent(panelRect, false);
             infoRect.anchorMin = new Vector2(0f, 0.55f);
             infoRect.anchorMax = new Vector2(1f, 1f);
-            infoRect.offsetMin = new Vector2(20, 0);
-            infoRect.offsetMax = new Vector2(-20, 0);
+            infoRect.offsetMin = new Vector2(28, 0);
+            infoRect.offsetMax = new Vector2(-28, 0);
             var infoLayout = infoGo.GetComponent<HorizontalLayoutGroup>();
             infoLayout.childForceExpandWidth = true;
             infoLayout.childForceExpandHeight = true;
             infoLayout.childAlignment = TextAnchor.MiddleCenter;
 
-            TextMeshProUGUI itemName = CreateChildText(infoRect, "ItemNameText", 26, TextAlignmentOptions.Left, Color.white);
-            TextMeshProUGUI dims = CreateChildText(infoRect, "DimensionsText", 22, TextAlignmentOptions.Center, new Color(0.85f, 0.85f, 0.85f));
-            TextMeshProUGUI seats = CreateChildText(infoRect, "SeatCountText", 22, TextAlignmentOptions.Right, new Color(0.85f, 0.85f, 0.85f));
+            TextMeshProUGUI itemName = CreateChildText(infoRect, "ItemNameText", 25, TextAlignmentOptions.Left, TextPrimary);
+            itemName.fontStyle = FontStyles.Bold;
+            TextMeshProUGUI dims = CreateChildText(infoRect, "DimensionsText", 21, TextAlignmentOptions.Center, TextMuted);
+            TextMeshProUGUI seats = CreateChildText(infoRect, "SeatCountText", 21, TextAlignmentOptions.Right, TextMuted);
 
             // Button row (bottom half)
             var buttonsGo = new GameObject("ButtonsRow", typeof(RectTransform), typeof(HorizontalLayoutGroup));
@@ -385,21 +442,20 @@ namespace ARSpace.Editor.AssetBuilders
             buttonsRect.SetParent(panelRect, false);
             buttonsRect.anchorMin = new Vector2(0f, 0f);
             buttonsRect.anchorMax = new Vector2(1f, 0.55f);
-            buttonsRect.offsetMin = new Vector2(20, 10);
-            buttonsRect.offsetMax = new Vector2(-20, -5);
+            buttonsRect.offsetMin = new Vector2(24, 10);
+            buttonsRect.offsetMax = new Vector2(-24, -6);
             var buttonsLayout = buttonsGo.GetComponent<HorizontalLayoutGroup>();
-            buttonsLayout.spacing = 12;
+            buttonsLayout.spacing = 14;
             buttonsLayout.childForceExpandWidth = true;
             buttonsLayout.childForceExpandHeight = true;
             buttonsLayout.childAlignment = TextAnchor.MiddleCenter;
 
-            Button duplicateBtn = CreateChildButton(buttonsRect, "DuplicateButton", "Duplicate");
-            Button rotateBtn = CreateChildButton(buttonsRect, "RotateButton", "Rotate 90°");
-            Button resetScaleBtn = CreateChildButton(buttonsRect, "ResetScaleButton", "Reset Scale");
-            Button lockBtn = CreateChildButton(buttonsRect, "LockButton", "Lock");
+            Button duplicateBtn = CreateChildButton(buttonsRect, "DuplicateButton", "Duplicate", SecondaryColor);
+            Button rotateBtn = CreateChildButton(buttonsRect, "RotateButton", "Rotate 90°", SecondaryColor);
+            Button resetScaleBtn = CreateChildButton(buttonsRect, "ResetScaleButton", "Reset", SecondaryColor);
+            Button lockBtn = CreateChildButton(buttonsRect, "LockButton", "Lock", SecondaryColor);
             TextMeshProUGUI lockText = lockBtn.GetComponentInChildren<TextMeshProUGUI>();
-            Button deleteBtn = CreateChildButton(buttonsRect, "DeleteButton", "Delete");
-            deleteBtn.GetComponent<Image>().color = new Color(0.75f, 0.2f, 0.15f, 1f);
+            Button deleteBtn = CreateChildButton(buttonsRect, "DeleteButton", "Delete", DangerColor);
 
             var toolbar = panelGo.GetComponent<SelectionToolbar>();
             AssignSerializedField(toolbar, "m_ToolbarPanel", panelGo);
@@ -412,11 +468,9 @@ namespace ARSpace.Editor.AssetBuilders
             AssignSerializedField(toolbar, "m_ResetScaleButton", resetScaleBtn);
             AssignSerializedField(toolbar, "m_LockButton", lockBtn);
             AssignSerializedField(toolbar, "m_LockStatusText", lockText);
-
-            return panelRect;
         }
 
-        static RectTransform BuildPlacementControls(Transform canvasT, float bottomY, float height)
+        static void BuildPlacementControls(Transform canvasT, float bottomY, float height)
         {
             var panelGo = new GameObject("PlacementControls", typeof(RectTransform), typeof(PlacementControls));
             RectTransform panelRect = ConfigureBottomBand(panelGo, canvasT, bottomY, height);
@@ -424,29 +478,25 @@ namespace ARSpace.Editor.AssetBuilders
             var layoutGo = new GameObject("Row", typeof(RectTransform), typeof(HorizontalLayoutGroup));
             var layoutRect = (RectTransform)layoutGo.transform;
             layoutRect.SetParent(panelRect, false);
-            StretchFull(layoutRect);
-            layoutRect.offsetMin = new Vector2(40, 15);
-            layoutRect.offsetMax = new Vector2(-40, -15);
+            StretchFull(layoutRect, 0, 0);
+            layoutRect.offsetMin = new Vector2(36, 18);
+            layoutRect.offsetMax = new Vector2(-36, -18);
             var layout = layoutGo.GetComponent<HorizontalLayoutGroup>();
-            layout.spacing = 24;
+            layout.spacing = 22;
             layout.childForceExpandWidth = true;
             layout.childForceExpandHeight = true;
             layout.childAlignment = TextAnchor.MiddleCenter;
 
-            Button cancelBtn = CreateChildButton(layoutRect, "CancelButton", "Cancel");
-            cancelBtn.GetComponent<Image>().color = new Color(0.3f, 0.3f, 0.32f, 1f);
+            Button cancelBtn = CreateChildButton(layoutRect, "CancelButton", "Cancel", SecondaryColor);
 
-            Button placeBtn = CreateChildButton(layoutRect, "PlaceButton", "Place");
-            placeBtn.GetComponent<Image>().color = new Color(1.0f, 0.42f, 0.0f, 1f);
+            Button placeBtn = CreateChildButton(layoutRect, "PlaceButton", "Place", PrimaryColor);
             var placeLabel = placeBtn.GetComponentInChildren<TextMeshProUGUI>();
-            placeLabel.fontSize = 32;
+            placeLabel.fontSize = 30;
             placeLabel.fontStyle = FontStyles.Bold;
 
             var controls = panelGo.GetComponent<PlacementControls>();
             AssignSerializedField(controls, "m_PlaceButton", placeBtn);
             AssignSerializedField(controls, "m_CancelButton", cancelBtn);
-
-            return panelRect;
         }
 
         // ── Generic UI construction helpers ───────────────────
@@ -486,7 +536,7 @@ namespace ARSpace.Editor.AssetBuilders
             bandRect.sizeDelta = new Vector2(0, height);
 
             TextMeshProUGUI text = CreateChildText(bandRect, name + "_Text", 30, TextAlignmentOptions.Center, Color.white);
-            StretchFull(text.rectTransform);
+            StretchFull(text.rectTransform, 24, 8);
             return text;
         }
 
@@ -503,28 +553,48 @@ namespace ARSpace.Editor.AssetBuilders
             return text;
         }
 
-        static Button CreateChildButton(Transform parent, string name, string label)
+        /// <summary>Creates a rounded, flat-color, drop-shadowed button — the shared style for every action button.</summary>
+        static Button CreateChildButton(Transform parent, string name, string label, Color color)
         {
             var go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
             var rect = (RectTransform)go.transform;
             rect.SetParent(parent, false);
 
-            var image = go.GetComponent<Image>();
-            image.color = new Color(1f, 1f, 1f, 0.9f);
+            StyleImage(go.GetComponent<Image>(), color, rounded: true);
+            AddShadow(go);
 
-            TextMeshProUGUI text = CreateChildText(rect, "Label", 24, TextAlignmentOptions.Center, Color.black);
+            TextMeshProUGUI text = CreateChildText(rect, "Label", 24, TextAlignmentOptions.Center, TextPrimary);
             text.text = label;
-            StretchFull(text.rectTransform);
+            text.fontStyle = FontStyles.Bold;
+            StretchFull(text.rectTransform, 10, 4);
 
             return go.GetComponent<Button>();
         }
 
-        static void StretchFull(RectTransform rect)
+        /// <summary>Applies the shared rounded-corner sprite (falls back to a flat rect if unavailable) and a color tint.</summary>
+        static void StyleImage(Image image, Color color, bool rounded)
+        {
+            image.color = color;
+            if (rounded && RoundedSprite != null)
+            {
+                image.sprite = RoundedSprite;
+                image.type = Image.Type.Sliced;
+            }
+        }
+
+        static void AddShadow(GameObject go)
+        {
+            var shadow = go.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.35f);
+            shadow.effectDistance = new Vector2(0f, -3f);
+        }
+
+        static void StretchFull(RectTransform rect, float horizontalPadding, float verticalPadding)
         {
             rect.anchorMin = Vector2.zero;
             rect.anchorMax = Vector2.one;
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
+            rect.offsetMin = new Vector2(horizontalPadding, verticalPadding);
+            rect.offsetMax = new Vector2(-horizontalPadding, -verticalPadding);
         }
 
         static void AssignSerializedField(Object target, string fieldName, Object value)
