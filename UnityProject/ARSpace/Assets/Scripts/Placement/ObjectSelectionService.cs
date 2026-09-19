@@ -116,9 +116,12 @@ namespace ARSpace.Placement
             Ray ray = m_MainCamera.ScreenPointToRay(screenPosition);
 
             // 2. Raycast for PlacedObject
-            if (Physics.Raycast(ray, out RaycastHit hit, 20f, m_ObjectLayerMask))
+            // RaycastAll so AR plane mesh colliders sitting at the furniture's feet can't shadow the furniture itself.
+            RaycastHit[] hits = Physics.RaycastAll(ray, 20f, m_ObjectLayerMask, QueryTriggerInteraction.Ignore);
+            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            for (int i = 0; i < hits.Length; i++)
             {
-                var placedObj = hit.collider.GetComponentInParent<PlacedObject>();
+                var placedObj = hits[i].collider.GetComponentInParent<PlacedObject>();
                 if (placedObj != null)
                 {
                     Select(placedObj);

@@ -57,6 +57,9 @@ namespace ARSpace.AR
         // Visibility & Fading state
         float m_CurrentAlpha = 0f;
         float m_TargetAlpha = 1f;
+        /// <summary>Visibility applied to planes that spawn after a global toggle (kept in sync by <see cref="PlaneVisibilityController"/>).</summary>
+        public static bool DefaultVisible = true;
+
         bool m_VisualsEnabled = true;
         bool m_InPresentationMode = false;
 
@@ -73,6 +76,7 @@ namespace ARSpace.AR
             m_LineRenderer = GetComponent<LineRenderer>();
 
             m_PropertyBlock = new MaterialPropertyBlock();
+            m_VisualsEnabled = DefaultVisible;
 
             // Set up LineRenderer for crisp boundary outline
             SetupLineRenderer();

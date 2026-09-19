@@ -55,19 +55,6 @@ namespace ARSpace.Editor.AssetBuilders
         const string OutlineMaterialPath = "Assets/Art/Materials/M_PlaneOutline.mat";
         const string DatabasePath = "Assets/ScriptableObjects/FurnitureDatabase.asset";
 
-        // ── Visual theme ───────────────────────────────────────
-        static readonly Color PanelBg = new Color(0.07f, 0.08f, 0.10f, 0.86f);
-        static readonly Color PrimaryColor = new Color(1.0f, 0.42f, 0.0f, 1f);
-        static readonly Color SecondaryColor = new Color(0.22f, 0.23f, 0.26f, 0.95f);
-        static readonly Color DangerColor = new Color(0.80f, 0.24f, 0.20f, 1f);
-        static readonly Color TextPrimary = Color.white;
-        static readonly Color TextMuted = new Color(0.75f, 0.77f, 0.82f, 1f);
-
-        static Sprite s_RoundedSprite;
-        static Sprite RoundedSprite => s_RoundedSprite != null
-            ? s_RoundedSprite
-            : (s_RoundedSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd"));
-
         static readonly HashSet<string> s_KeepRootNames = new HashSet<string>
         {
             "AR Session",
@@ -102,12 +89,13 @@ namespace ARSpace.Editor.AssetBuilders
                                   "Run 'ARSpace → Setup Plane Grid Assets' first for correctly rendered reticle/selection outlines.");
             }
 
+            UiAssetBuilder.EnsureContactShadowMaterial();
+
             GameObject reticleGo = BuildPlacementReticle(outlineMat);
             BuildSelectionVisual(outlineMat);
             BuildManagersHierarchy(reticleGo);
             BuildEventSystem();
             BuildCanvas();
-            BuildDebugHud();
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
@@ -250,6 +238,7 @@ namespace ARSpace.Editor.AssetBuilders
 
             root.AddComponent<AnchorService>();
             root.AddComponent<PlacedObjectRegistry>();
+            root.AddComponent<PlaneVisibilityController>();
             root.AddComponent<ObjectSelectionService>();
             root.AddComponent<GestureRouter>();
             root.AddComponent<ObjectManipulator>();
@@ -264,7 +253,8 @@ namespace ARSpace.Editor.AssetBuilders
         static void BuildEventSystem()
         {
             var go = new GameObject("EventSystem");
-            go.AddComponent<EventSystem>();
+            var eventSystem = go.AddComponent<EventSystem>();
+            eventSystem.pixelDragThreshold = 24; // forgiving on high-density phone screens so card rows scroll instead of mis-tapping
 #if ENABLE_INPUT_SYSTEM
             go.AddComponent<InputSystemUIInputModule>();
 #else
@@ -274,20 +264,24 @@ namespace ARSpace.Editor.AssetBuilders
 
         // ── Canvas / UI ────────────────────────────────────────
         //
-        // Bottom-up band layout (heights chosen so nothing overlaps):
-        //   Catalogue drawer     : 0   – 190
-        //   Selection toolbar    : 190 – 370   (hidden unless an object is selected)
-        //   Placement controls   : 370 – 500
-        //   Toast (floating)     : 520 – 610   (clear of every band above)
-        //   Guidance banner      : docked to the top edge
+        // Layout (reference 1080x1920, all inside the device safe area):
+        //   top      : hint pill (what to do next)
+        //   bottom   : catalogue sheet (title, category chips, item cards)
+        //   floating : selection card OR place/cancel bar, just above the sheet; toast above those
 
-        const float CatalogHeight = 190f;
-        const float ToolbarHeight = 180f;
-        const float PlacementHeight = 130f;
-        const float ToastY = 520f;
+        const float SheetHeight = 440f;
+        const float SheetHiddenExtra = 80f;   // sheet is drawn this far below the screen so its bottom corners are never visible
+        const float FloatingGap = 18f;
+        const float ActionBarHeight = 104f;
+        const float SelectionCardHeight = 214f;
+        const float SideMargin = 32f;
+
+        static Sprite s_Rounded;
 
         static void BuildCanvas()
         {
+            s_Rounded = UiAssetBuilder.EnsureRoundedSprite();
+
             var canvasGo = new GameObject("Canvas", typeof(RectTransform));
             var canvas = canvasGo.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -298,167 +292,292 @@ namespace ARSpace.Editor.AssetBuilders
             scaler.matchWidthOrHeight = 0.5f;
 
             canvasGo.AddComponent<GraphicRaycaster>();
-            Transform canvasT = canvasGo.transform;
 
-            // Top guidance banner ("Point your phone at the floor", "Too dark", ...)
-            TextMeshProUGUI guidanceText = CreateBand(canvasT, "GuidanceBanner", top: true, y: 0, height: 110,
-                out RectTransform guidanceBandRect);
-            StyleImage(guidanceBandRect.GetComponent<Image>(), new Color(0f, 0f, 0f, 0.6f), rounded: false);
-            guidanceText.fontSize = 32;
-            guidanceText.fontStyle = FontStyles.Bold;
-            guidanceText.alignment = TextAlignmentOptions.Center;
-            guidanceText.color = TextPrimary;
+            var safeGo = new GameObject("SafeArea", typeof(RectTransform), typeof(SafeAreaFitter));
+            var safeRect = (RectTransform)safeGo.transform;
+            safeRect.SetParent(canvasGo.transform, false);
+            safeRect.anchorMin = Vector2.zero;
+            safeRect.anchorMax = Vector2.one;
+            safeRect.offsetMin = Vector2.zero;
+            safeRect.offsetMax = Vector2.zero;
+            Transform safe = safeRect;
 
-            // Floating toast (short-lived confirmations / warnings) — sits clear above every bottom band
-            var toastGo = new GameObject("ToastPanel", typeof(RectTransform), typeof(CanvasGroup), typeof(Image));
-            var toastRect = (RectTransform)toastGo.transform;
-            toastRect.SetParent(canvasT, false);
-            toastRect.anchorMin = new Vector2(0.5f, 0f);
-            toastRect.anchorMax = new Vector2(0.5f, 0f);
-            toastRect.pivot = new Vector2(0.5f, 0f);
-            toastRect.sizeDelta = new Vector2(920, 96);
-            toastRect.anchoredPosition = new Vector2(0, ToastY);
-            StyleImage(toastGo.GetComponent<Image>(), new Color(0.05f, 0.05f, 0.06f, 0.92f), rounded: true);
-            AddShadow(toastGo);
-            var toastGroup = toastGo.GetComponent<CanvasGroup>();
-            toastGroup.alpha = 0f;
-            TextMeshProUGUI toastText = CreateChildText(toastRect, "ToastText", 28, TextAlignmentOptions.Center, TextPrimary);
-            StretchFull(toastText.rectTransform, 24, 8);
-
-            // Bottom bands, stacked bottom-up: catalogue / selection toolbar / place-cancel
-            BuildCatalogDrawer(canvasT, bottomY: 0, height: CatalogHeight);
-            BuildSelectionToolbar(canvasT, bottomY: CatalogHeight, height: ToolbarHeight);
-            BuildPlacementControls(canvasT, bottomY: CatalogHeight + ToolbarHeight, height: PlacementHeight);
-
-            // Toast presenter wiring
-            var toastPresenterGo = new GameObject("ToastPresenter");
-            toastPresenterGo.transform.SetParent(canvasT, false);
-            var toastPresenter = toastPresenterGo.AddComponent<ToastPresenter>();
-            AssignSerializedField(toastPresenter, "m_ToastGroup", toastGroup);
-            AssignSerializedField(toastPresenter, "m_ToastText", toastText);
-            AssignSerializedField(toastPresenter, "m_GuidanceText", guidanceText);
+            BuildTopHint(safe);
+            BuildToast(safe);
+            BuildCatalogSheet(safe);
+            BuildSelectionCard(safe);
+            BuildPlacementBar(safe);
         }
 
-        static void BuildDebugHud()
+        static void BuildTopHint(Transform parent)
         {
-            var canvasGo = new GameObject("DebugHudCanvas", typeof(RectTransform));
-            var canvas = canvasGo.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 100;
-            var scaler = canvasGo.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1080, 1920);
-            scaler.matchWidthOrHeight = 0.5f;
-            canvasGo.AddComponent<GraphicRaycaster>();
+            var go = new GameObject("HintPill", typeof(RectTransform), typeof(Image), typeof(CanvasGroup), typeof(Button), typeof(CoachHints));
+            var rect = (RectTransform)go.transform;
+            rect.SetParent(parent, false);
+            rect.anchorMin = new Vector2(0.5f, 1f);
+            rect.anchorMax = new Vector2(0.5f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.sizeDelta = new Vector2(980, 88);
+            rect.anchoredPosition = new Vector2(0, -24);
 
-            var panelGo = new GameObject("DebugHud", typeof(RectTransform), typeof(Image), typeof(DebugHud));
-            var rect = (RectTransform)panelGo.transform;
-            rect.SetParent(canvasGo.transform, false);
+            var image = go.GetComponent<Image>();
+            UiStyle.Round(image, s_Rounded, 44f);
+            image.color = new Color(0.05f, 0.06f, 0.08f, 0.72f);
+            var button = go.GetComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            var group = go.GetComponent<CanvasGroup>();
+            group.alpha = 0f;
+
+            TextMeshProUGUI text = CreateText(rect, "Text", 28, FontStyles.Bold, TextAlignmentOptions.Center, UiStyle.TextPrimary);
+            Stretch(text.rectTransform, 36, 8);
+            text.enableAutoSizing = true;
+            text.fontSizeMin = 20;
+            text.fontSizeMax = 28;
+            text.raycastTarget = false;
+
+            // Diagnostic overlay (hidden until the hint pill is tapped five times).
+            var hudGo = new GameObject("DebugHud", typeof(RectTransform), typeof(Image), typeof(DebugHud));
+            var hudRect = (RectTransform)hudGo.transform;
+            hudRect.SetParent(parent, false);
+            hudRect.anchorMin = new Vector2(0.5f, 1f);
+            hudRect.anchorMax = new Vector2(0.5f, 1f);
+            hudRect.pivot = new Vector2(0.5f, 1f);
+            hudRect.sizeDelta = new Vector2(760, 52);
+            hudRect.anchoredPosition = new Vector2(0, -122);
+            var hudImage = hudGo.GetComponent<Image>();
+            UiStyle.Round(hudImage, s_Rounded, 26f);
+            hudImage.color = new Color(0f, 0f, 0f, 0.6f);
+            hudImage.raycastTarget = false;
+            TextMeshProUGUI hudText = CreateText(hudRect, "Text", 20, FontStyles.Normal, TextAlignmentOptions.Center, new Color(0.6f, 1f, 0.6f, 1f));
+            Stretch(hudText.rectTransform, 14, 4);
+            hudText.raycastTarget = false;
+            AssignSerializedField(hudGo.GetComponent<DebugHud>(), "m_Text", hudText);
+
+            var hints = go.GetComponent<CoachHints>();
+            AssignSerializedField(hints, "m_Group", group);
+            AssignSerializedField(hints, "m_Text", text);
+            AssignSerializedField(hints, "m_SecretToggle", button);
+            AssignSerializedField(hints, "m_DebugHudRoot", hudGo);
+        }
+
+        static void BuildToast(Transform parent)
+        {
+            var go = new GameObject("ToastPanel", typeof(RectTransform), typeof(CanvasGroup), typeof(Image));
+            var rect = (RectTransform)go.transform;
+            rect.SetParent(parent, false);
+            rect.anchorMin = new Vector2(0.5f, 0f);
+            rect.anchorMax = new Vector2(0.5f, 0f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.sizeDelta = new Vector2(900, 88);
+            rect.anchoredPosition = new Vector2(0, SheetHeight + FloatingGap + SelectionCardHeight + FloatingGap);
+
+            var image = go.GetComponent<Image>();
+            UiStyle.Round(image, s_Rounded, 44f);
+            image.color = new Color(0.05f, 0.06f, 0.08f, 0.94f);
+            image.raycastTarget = false;
+            AddShadow(go);
+
+            var group = go.GetComponent<CanvasGroup>();
+            group.alpha = 0f;
+            group.blocksRaycasts = false;
+            group.interactable = false;
+
+            TextMeshProUGUI text = CreateText(rect, "ToastText", 27, FontStyles.Bold, TextAlignmentOptions.Center, UiStyle.TextPrimary);
+            Stretch(text.rectTransform, 32, 8);
+            text.enableAutoSizing = true;
+            text.fontSizeMin = 20;
+            text.fontSizeMax = 27;
+            text.raycastTarget = false;
+
+            var presenterGo = new GameObject("ToastPresenter");
+            presenterGo.transform.SetParent(parent, false);
+            var presenter = presenterGo.AddComponent<ToastPresenter>();
+            AssignSerializedField(presenter, "m_ToastGroup", group);
+            AssignSerializedField(presenter, "m_ToastText", text);
+        }
+
+        static void BuildCatalogSheet(Transform parent)
+        {
+            var go = new GameObject("CatalogSheet", typeof(RectTransform), typeof(Image), typeof(CatalogPanel));
+            var rect = (RectTransform)go.transform;
+            rect.SetParent(parent, false);
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(1f, 0f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.sizeDelta = new Vector2(0, SheetHeight + SheetHiddenExtra);
+            rect.anchoredPosition = new Vector2(0, -SheetHiddenExtra);
+
+            var image = go.GetComponent<Image>();
+            UiStyle.Round(image, s_Rounded, 44f);
+            image.color = UiStyle.Panel;
+            AddShadow(go, new Vector2(0f, 6f));
+
+            // Grabber
+            var grab = new GameObject("Grabber", typeof(RectTransform), typeof(Image));
+            var grabRect = (RectTransform)grab.transform;
+            grabRect.SetParent(rect, false);
+            grabRect.anchorMin = new Vector2(0.5f, 1f);
+            grabRect.anchorMax = new Vector2(0.5f, 1f);
+            grabRect.pivot = new Vector2(0.5f, 1f);
+            grabRect.sizeDelta = new Vector2(84, 8);
+            grabRect.anchoredPosition = new Vector2(0, -14);
+            var grabImage = grab.GetComponent<Image>();
+            UiStyle.Round(grabImage, s_Rounded, 4f);
+            grabImage.color = new Color(1f, 1f, 1f, 0.28f);
+            grabImage.raycastTarget = false;
+
+            // Title + count
+            TextMeshProUGUI title = CreateText(rect, "Title", 40, FontStyles.Bold, TextAlignmentOptions.Left, UiStyle.TextPrimary);
+            var titleRect = title.rectTransform;
+            titleRect.anchorMin = new Vector2(0f, 1f);
+            titleRect.anchorMax = new Vector2(0f, 1f);
+            titleRect.pivot = new Vector2(0f, 1f);
+            titleRect.sizeDelta = new Vector2(520, 52);
+            titleRect.anchoredPosition = new Vector2(SideMargin + 8, -32);
+            title.text = "Catalogue";
+            title.raycastTarget = false;
+
+            TextMeshProUGUI count = CreateText(rect, "Count", 26, FontStyles.Normal, TextAlignmentOptions.Right, UiStyle.TextMuted);
+            var countRect = count.rectTransform;
+            countRect.anchorMin = new Vector2(1f, 1f);
+            countRect.anchorMax = new Vector2(1f, 1f);
+            countRect.pivot = new Vector2(1f, 1f);
+            countRect.sizeDelta = new Vector2(320, 40);
+            countRect.anchoredPosition = new Vector2(-(SideMargin + 8), -40);
+            count.raycastTarget = false;
+
+            // Category chips (horizontal scroller)
+            RectTransform chipContent = CreateHorizontalScroller(rect, "Chips", 64f, -100f, 14f, new RectOffset((int)SideMargin, (int)SideMargin, 2, 2), out ScrollRect chipScroll);
+
+            // Item cards (horizontal scroller)
+            RectTransform cardContent = CreateHorizontalScroller(rect, "Cards", 250f, -176f, 18f, new RectOffset((int)SideMargin, (int)SideMargin, 8, 8), out ScrollRect cardScroll);
+
+            var panel = go.GetComponent<CatalogPanel>();
+            AssignSerializedField(panel, "m_Content", cardContent);
+            AssignSerializedField(panel, "m_ChipContent", chipContent);
+            AssignSerializedField(panel, "m_CardScroll", cardScroll);
+            AssignSerializedField(panel, "m_CountText", count);
+            AssignSerializedField(panel, "m_RoundedSprite", s_Rounded);
+        }
+
+        static RectTransform CreateHorizontalScroller(Transform parent, string name, float height, float topY, float spacing, RectOffset padding, out ScrollRect scroll)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(ScrollRect));
+            var rect = (RectTransform)go.transform;
+            rect.SetParent(parent, false);
             rect.anchorMin = new Vector2(0f, 1f);
             rect.anchorMax = new Vector2(1f, 1f);
             rect.pivot = new Vector2(0.5f, 1f);
-            rect.sizeDelta = new Vector2(0, 56);
-            rect.anchoredPosition = new Vector2(0, -120);
-            StyleImage(panelGo.GetComponent<Image>(), new Color(0f, 0f, 0f, 0.5f), rounded: false);
+            rect.sizeDelta = new Vector2(0, height);
+            rect.anchoredPosition = new Vector2(0, topY);
 
-            TextMeshProUGUI text = CreateChildText(rect, "Text", 20, TextAlignmentOptions.Center, new Color(0.6f, 1f, 0.6f, 1f));
-            StretchFull(text.rectTransform, 12, 4);
+            var viewport = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D), typeof(Image));
+            var viewportRect = (RectTransform)viewport.transform;
+            viewportRect.SetParent(rect, false);
+            Stretch(viewportRect, 0, 0);
+            viewport.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.004f); // invisible, but receives drags
 
-            var hud = panelGo.GetComponent<DebugHud>();
-            AssignSerializedField(hud, "m_Text", text);
-        }
-
-        static void BuildCatalogDrawer(Transform canvasT, float bottomY, float height)
-        {
-            var panelGo = new GameObject("CatalogDrawer", typeof(RectTransform), typeof(Image), typeof(CatalogPanel));
-            RectTransform panelRect = ConfigureBottomBand(panelGo, canvasT, bottomY, height);
-            StyleImage(panelGo.GetComponent<Image>(), PanelBg, rounded: false);
-
-            var viewportGo = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask));
-            var viewportRect = (RectTransform)viewportGo.transform;
-            viewportRect.SetParent(panelRect, false);
-            StretchFull(viewportRect, 0, 0);
-            viewportGo.GetComponent<Image>().color = new Color(1, 1, 1, 0.01f);
-            viewportGo.GetComponent<Mask>().showMaskGraphic = false;
-
-            var scrollRectGo = panelGo.AddComponent<ScrollRect>();
-            scrollRectGo.horizontal = true;
-            scrollRectGo.vertical = false;
-            scrollRectGo.movementType = ScrollRect.MovementType.Clamped;
-            scrollRectGo.viewport = viewportRect;
-
-            var contentGo = new GameObject("Content", typeof(RectTransform));
-            var contentRect = (RectTransform)contentGo.transform;
+            var content = new GameObject("Content", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(ContentSizeFitter));
+            var contentRect = (RectTransform)content.transform;
             contentRect.SetParent(viewportRect, false);
             contentRect.anchorMin = new Vector2(0f, 0f);
             contentRect.anchorMax = new Vector2(0f, 1f);
             contentRect.pivot = new Vector2(0f, 0.5f);
             contentRect.anchoredPosition = Vector2.zero;
 
-            var layout = contentGo.AddComponent<HorizontalLayoutGroup>();
-            layout.padding = new RectOffset(24, 24, 20, 20);
-            layout.spacing = 18;
+            var layout = content.GetComponent<HorizontalLayoutGroup>();
+            layout.padding = padding;
+            layout.spacing = spacing;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
             layout.childForceExpandWidth = false;
-            layout.childForceExpandHeight = true;
+            layout.childForceExpandHeight = false;
             layout.childAlignment = TextAnchor.MiddleLeft;
 
-            var fitter = contentGo.AddComponent<ContentSizeFitter>();
-            fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            content.GetComponent<ContentSizeFitter>().horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            scrollRectGo.content = contentRect;
-
-            var catalogPanel = panelGo.GetComponent<CatalogPanel>();
-            AssignSerializedField(catalogPanel, "m_Content", contentRect);
-            AssignSerializedField(catalogPanel, "m_CardSprite", RoundedSprite);
+            scroll = go.GetComponent<ScrollRect>();
+            scroll.horizontal = true;
+            scroll.vertical = false;
+            scroll.movementType = ScrollRect.MovementType.Elastic;
+            scroll.scrollSensitivity = 30f;
+            scroll.viewport = viewportRect;
+            scroll.content = contentRect;
+            return contentRect;
         }
 
-        static void BuildSelectionToolbar(Transform canvasT, float bottomY, float height)
+        static void BuildSelectionCard(Transform parent)
         {
-            var panelGo = new GameObject("SelectionToolbar", typeof(RectTransform), typeof(Image), typeof(SelectionToolbar));
-            RectTransform panelRect = ConfigureBottomBand(panelGo, canvasT, bottomY, height);
-            StyleImage(panelGo.GetComponent<Image>(), PanelBg, rounded: false);
+            // The script lives on an always-active holder: SelectionToolbar hides its panel by deactivating it,
+            // and an inactive object can no longer receive the selection events that re-show it.
+            var holder = new GameObject("SelectionToolbar", typeof(RectTransform), typeof(SelectionToolbar));
+            var holderRect = (RectTransform)holder.transform;
+            holderRect.SetParent(parent, false);
+            Stretch(holderRect, 0, 0);
 
-            // Info row (top half)
+            var go = new GameObject("Card", typeof(RectTransform), typeof(Image));
+            var rect = (RectTransform)go.transform;
+            rect.SetParent(holderRect, false);
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(1f, 0f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.offsetMin = new Vector2(SideMargin, SheetHeight + FloatingGap);
+            rect.offsetMax = new Vector2(-SideMargin, SheetHeight + FloatingGap + SelectionCardHeight);
+
+            var image = go.GetComponent<Image>();
+            UiStyle.Round(image, s_Rounded, 40f);
+            image.color = UiStyle.Panel;
+            AddShadow(go);
+
+            // Header: name / dimensions / seats
             var infoGo = new GameObject("InfoRow", typeof(RectTransform), typeof(HorizontalLayoutGroup));
             var infoRect = (RectTransform)infoGo.transform;
-            infoRect.SetParent(panelRect, false);
-            infoRect.anchorMin = new Vector2(0f, 0.55f);
+            infoRect.SetParent(rect, false);
+            infoRect.anchorMin = new Vector2(0f, 1f);
             infoRect.anchorMax = new Vector2(1f, 1f);
-            infoRect.offsetMin = new Vector2(28, 0);
-            infoRect.offsetMax = new Vector2(-28, 0);
+            infoRect.pivot = new Vector2(0.5f, 1f);
+            infoRect.offsetMin = new Vector2(32, -80);
+            infoRect.offsetMax = new Vector2(-32, -20);
             var infoLayout = infoGo.GetComponent<HorizontalLayoutGroup>();
+            infoLayout.childControlWidth = true;
+            infoLayout.childControlHeight = true;
             infoLayout.childForceExpandWidth = true;
             infoLayout.childForceExpandHeight = true;
             infoLayout.childAlignment = TextAnchor.MiddleCenter;
 
-            TextMeshProUGUI itemName = CreateChildText(infoRect, "ItemNameText", 25, TextAlignmentOptions.Left, TextPrimary);
-            itemName.fontStyle = FontStyles.Bold;
-            TextMeshProUGUI dims = CreateChildText(infoRect, "DimensionsText", 21, TextAlignmentOptions.Center, TextMuted);
-            TextMeshProUGUI seats = CreateChildText(infoRect, "SeatCountText", 21, TextAlignmentOptions.Right, TextMuted);
+            TextMeshProUGUI itemName = CreateText(infoRect, "ItemNameText", 30, FontStyles.Bold, TextAlignmentOptions.Left, UiStyle.TextPrimary);
+            itemName.enableWordWrapping = false;
+            itemName.overflowMode = TextOverflowModes.Ellipsis;
+            TextMeshProUGUI dims = CreateText(infoRect, "DimensionsText", 22, FontStyles.Normal, TextAlignmentOptions.Center, UiStyle.TextMuted);
+            TextMeshProUGUI seats = CreateText(infoRect, "SeatCountText", 22, FontStyles.Normal, TextAlignmentOptions.Right, UiStyle.TextMuted);
+            itemName.raycastTarget = false; dims.raycastTarget = false; seats.raycastTarget = false;
 
-            // Button row (bottom half)
+            // Actions
             var buttonsGo = new GameObject("ButtonsRow", typeof(RectTransform), typeof(HorizontalLayoutGroup));
             var buttonsRect = (RectTransform)buttonsGo.transform;
-            buttonsRect.SetParent(panelRect, false);
+            buttonsRect.SetParent(rect, false);
             buttonsRect.anchorMin = new Vector2(0f, 0f);
-            buttonsRect.anchorMax = new Vector2(1f, 0.55f);
-            buttonsRect.offsetMin = new Vector2(24, 10);
-            buttonsRect.offsetMax = new Vector2(-24, -6);
+            buttonsRect.anchorMax = new Vector2(1f, 0f);
+            buttonsRect.pivot = new Vector2(0.5f, 0f);
+            buttonsRect.offsetMin = new Vector2(24, 22);
+            buttonsRect.offsetMax = new Vector2(-24, 122);
             var buttonsLayout = buttonsGo.GetComponent<HorizontalLayoutGroup>();
-            buttonsLayout.spacing = 14;
+            buttonsLayout.spacing = 12;
+            buttonsLayout.childControlWidth = true;
+            buttonsLayout.childControlHeight = true;
             buttonsLayout.childForceExpandWidth = true;
             buttonsLayout.childForceExpandHeight = true;
             buttonsLayout.childAlignment = TextAnchor.MiddleCenter;
 
-            Button duplicateBtn = CreateChildButton(buttonsRect, "DuplicateButton", "Duplicate", SecondaryColor);
-            Button rotateBtn = CreateChildButton(buttonsRect, "RotateButton", "Rotate 90°", SecondaryColor);
-            Button resetScaleBtn = CreateChildButton(buttonsRect, "ResetScaleButton", "Reset", SecondaryColor);
-            Button lockBtn = CreateChildButton(buttonsRect, "LockButton", "Lock", SecondaryColor);
+            Button duplicateBtn = CreateButton(buttonsRect, "DuplicateButton", "Duplicate", UiStyle.Secondary, 24f, 23);
+            Button rotateBtn = CreateButton(buttonsRect, "RotateButton", "Rotate", UiStyle.Secondary, 24f, 23);
+            Button resetScaleBtn = CreateButton(buttonsRect, "ResetScaleButton", "Reset", UiStyle.Secondary, 24f, 23);
+            Button lockBtn = CreateButton(buttonsRect, "LockButton", "Lock", UiStyle.Secondary, 24f, 23);
             TextMeshProUGUI lockText = lockBtn.GetComponentInChildren<TextMeshProUGUI>();
-            Button deleteBtn = CreateChildButton(buttonsRect, "DeleteButton", "Delete", DangerColor);
+            Button deleteBtn = CreateButton(buttonsRect, "DeleteButton", "Delete", UiStyle.Danger, 24f, 23);
 
-            var toolbar = panelGo.GetComponent<SelectionToolbar>();
-            AssignSerializedField(toolbar, "m_ToolbarPanel", panelGo);
+            var toolbar = holder.GetComponent<SelectionToolbar>();
+            AssignSerializedField(toolbar, "m_ToolbarPanel", go);
             AssignSerializedField(toolbar, "m_ItemNameText", itemName);
             AssignSerializedField(toolbar, "m_DimensionsText", dims);
             AssignSerializedField(toolbar, "m_SeatCountText", seats);
@@ -470,126 +589,96 @@ namespace ARSpace.Editor.AssetBuilders
             AssignSerializedField(toolbar, "m_LockStatusText", lockText);
         }
 
-        static void BuildPlacementControls(Transform canvasT, float bottomY, float height)
+        static void BuildPlacementBar(Transform parent)
         {
-            var panelGo = new GameObject("PlacementControls", typeof(RectTransform), typeof(PlacementControls));
-            RectTransform panelRect = ConfigureBottomBand(panelGo, canvasT, bottomY, height);
+            // The script lives on a stretch-all holder so it keeps receiving events while the visible bar is hidden.
+            var holder = new GameObject("PlacementControls", typeof(RectTransform), typeof(PlacementControls));
+            var holderRect = (RectTransform)holder.transform;
+            holderRect.SetParent(parent, false);
+            Stretch(holderRect, 0, 0);
 
-            var layoutGo = new GameObject("Row", typeof(RectTransform), typeof(HorizontalLayoutGroup));
-            var layoutRect = (RectTransform)layoutGo.transform;
-            layoutRect.SetParent(panelRect, false);
-            StretchFull(layoutRect, 0, 0);
-            layoutRect.offsetMin = new Vector2(36, 18);
-            layoutRect.offsetMax = new Vector2(-36, -18);
-            var layout = layoutGo.GetComponent<HorizontalLayoutGroup>();
-            layout.spacing = 22;
-            layout.childForceExpandWidth = true;
+            var bar = new GameObject("Bar", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            var barRect = (RectTransform)bar.transform;
+            barRect.SetParent(holderRect, false);
+            barRect.anchorMin = new Vector2(0f, 0f);
+            barRect.anchorMax = new Vector2(1f, 0f);
+            barRect.pivot = new Vector2(0.5f, 0f);
+            barRect.offsetMin = new Vector2(SideMargin, SheetHeight + FloatingGap);
+            barRect.offsetMax = new Vector2(-SideMargin, SheetHeight + FloatingGap + ActionBarHeight);
+
+            var layout = bar.GetComponent<HorizontalLayoutGroup>();
+            layout.spacing = 20;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = false;
             layout.childForceExpandHeight = true;
             layout.childAlignment = TextAnchor.MiddleCenter;
 
-            Button cancelBtn = CreateChildButton(layoutRect, "CancelButton", "Cancel", SecondaryColor);
+            Button cancelBtn = CreateButton(barRect, "CancelButton", "Cancel", UiStyle.Secondary, 52f, 30);
+            var cancelLayout = cancelBtn.gameObject.AddComponent<LayoutElement>();
+            cancelLayout.preferredWidth = 290;
+            cancelLayout.flexibleWidth = 0;
 
-            Button placeBtn = CreateChildButton(layoutRect, "PlaceButton", "Place", PrimaryColor);
-            var placeLabel = placeBtn.GetComponentInChildren<TextMeshProUGUI>();
-            placeLabel.fontSize = 30;
-            placeLabel.fontStyle = FontStyles.Bold;
+            Button placeBtn = CreateButton(barRect, "PlaceButton", "Place here", UiStyle.Primary, 52f, 32);
+            var placeLayout = placeBtn.gameObject.AddComponent<LayoutElement>();
+            placeLayout.flexibleWidth = 1;
+            TextMeshProUGUI placeLabel = placeBtn.GetComponentInChildren<TextMeshProUGUI>();
+            placeLabel.enableWordWrapping = false;
+            placeLabel.overflowMode = TextOverflowModes.Ellipsis;
 
-            var controls = panelGo.GetComponent<PlacementControls>();
+            var controls = holder.GetComponent<PlacementControls>();
+            AssignSerializedField(controls, "m_BarRoot", bar);
             AssignSerializedField(controls, "m_PlaceButton", placeBtn);
             AssignSerializedField(controls, "m_CancelButton", cancelBtn);
+            AssignSerializedField(controls, "m_PlaceLabel", placeLabel);
         }
 
         // ── Generic UI construction helpers ───────────────────
 
-        static RectTransform ConfigureBottomBand(GameObject go, Transform canvasT, float bottomY, float height)
-        {
-            var rect = (RectTransform)go.transform;
-            rect.SetParent(canvasT, false);
-            rect.anchorMin = new Vector2(0f, 0f);
-            rect.anchorMax = new Vector2(1f, 0f);
-            rect.pivot = new Vector2(0.5f, 0f);
-            rect.sizeDelta = new Vector2(0, height);
-            rect.anchoredPosition = new Vector2(0, bottomY);
-            return rect;
-        }
-
-        static TextMeshProUGUI CreateBand(Transform canvasT, string name, bool top, float y, float height, out RectTransform bandRect)
-        {
-            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
-            bandRect = (RectTransform)go.transform;
-            bandRect.SetParent(canvasT, false);
-
-            if (top)
-            {
-                bandRect.anchorMin = new Vector2(0f, 1f);
-                bandRect.anchorMax = new Vector2(1f, 1f);
-                bandRect.pivot = new Vector2(0.5f, 1f);
-                bandRect.anchoredPosition = new Vector2(0, -y);
-            }
-            else
-            {
-                bandRect.anchorMin = new Vector2(0f, 0f);
-                bandRect.anchorMax = new Vector2(1f, 0f);
-                bandRect.pivot = new Vector2(0.5f, 0f);
-                bandRect.anchoredPosition = new Vector2(0, y);
-            }
-            bandRect.sizeDelta = new Vector2(0, height);
-
-            TextMeshProUGUI text = CreateChildText(bandRect, name + "_Text", 30, TextAlignmentOptions.Center, Color.white);
-            StretchFull(text.rectTransform, 24, 8);
-            return text;
-        }
-
-        static TextMeshProUGUI CreateChildText(Transform parent, string name, float fontSize, TextAlignmentOptions alignment, Color color)
+        static TextMeshProUGUI CreateText(Transform parent, string name, float fontSize, FontStyles style, TextAlignmentOptions alignment, Color color)
         {
             var go = new GameObject(name, typeof(RectTransform));
-            var rect = (RectTransform)go.transform;
-            rect.SetParent(parent, false);
+            go.transform.SetParent(parent, false);
             var text = go.AddComponent<TextMeshProUGUI>();
             text.fontSize = fontSize;
+            text.fontStyle = style;
             text.alignment = alignment;
             text.color = color;
             text.text = string.Empty;
             return text;
         }
 
-        /// <summary>Creates a rounded, flat-color, drop-shadowed button — the shared style for every action button.</summary>
-        static Button CreateChildButton(Transform parent, string name, string label, Color color)
+        /// <summary>Rounded, flat-colour, softly shadowed button — the shared style for every action button.</summary>
+        static Button CreateButton(Transform parent, string name, string label, Color color, float radius, float fontSize)
         {
             var go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
             var rect = (RectTransform)go.transform;
             rect.SetParent(parent, false);
 
-            StyleImage(go.GetComponent<Image>(), color, rounded: true);
+            var image = go.GetComponent<Image>();
+            UiStyle.Round(image, s_Rounded, radius);
+            image.color = color;
             AddShadow(go);
 
-            TextMeshProUGUI text = CreateChildText(rect, "Label", 24, TextAlignmentOptions.Center, TextPrimary);
+            TextMeshProUGUI text = CreateText(rect, "Label", fontSize, FontStyles.Bold, TextAlignmentOptions.Center, UiStyle.TextPrimary);
             text.text = label;
-            text.fontStyle = FontStyles.Bold;
-            StretchFull(text.rectTransform, 10, 4);
+            text.raycastTarget = false;
+            text.enableWordWrapping = false;
+            Stretch(text.rectTransform, 8, 4);
 
             return go.GetComponent<Button>();
         }
 
-        /// <summary>Applies the shared rounded-corner sprite (falls back to a flat rect if unavailable) and a color tint.</summary>
-        static void StyleImage(Image image, Color color, bool rounded)
-        {
-            image.color = color;
-            if (rounded && RoundedSprite != null)
-            {
-                image.sprite = RoundedSprite;
-                image.type = Image.Type.Sliced;
-            }
-        }
+        static void AddShadow(GameObject go) => AddShadow(go, new Vector2(0f, -4f));
 
-        static void AddShadow(GameObject go)
+        static void AddShadow(GameObject go, Vector2 distance)
         {
             var shadow = go.AddComponent<Shadow>();
-            shadow.effectColor = new Color(0f, 0f, 0f, 0.35f);
-            shadow.effectDistance = new Vector2(0f, -3f);
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.32f);
+            shadow.effectDistance = distance;
         }
 
-        static void StretchFull(RectTransform rect, float horizontalPadding, float verticalPadding)
+        static void Stretch(RectTransform rect, float horizontalPadding, float verticalPadding)
         {
             rect.anchorMin = Vector2.zero;
             rect.anchorMax = Vector2.one;

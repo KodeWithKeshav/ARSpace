@@ -187,6 +187,12 @@ namespace ARSpace.Placement
                 }
             }
 
+            // A freshly created anchor can report a stale (identity) transform for a frame or two.
+            // Children are parented with world-position-stays, so pin it to the requested pose now;
+            // otherwise the child would inherit the wrong local offset and drift/float once tracking corrects it.
+            if (cluster.Anchor != null)
+                cluster.Anchor.transform.SetPositionAndRotation(pose.position, pose.rotation);
+
             // Attempt 3: Simulation or fallback anchor
             if (cluster.Anchor == null)
             {

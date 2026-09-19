@@ -88,6 +88,7 @@ namespace ARSpace.Placement
                         // Keeps Y exactly at floor plane level
                         Vector3 newPos = hit.pose.position;
                         m_ActiveObject.transform.position = newPos;
+                        m_ActiveObject.SnapBaseToHeight(newPos.y);
 
                         // Check collision conflict while dragging
                         CheckCollisionFeedback(m_ActiveObject);

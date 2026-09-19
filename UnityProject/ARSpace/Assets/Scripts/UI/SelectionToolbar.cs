@@ -142,6 +142,7 @@ namespace ARSpace.UI
             if (m_SelectedObject == null || m_SelectedObject.Item == null) return;
 
             FurnitureItem item = m_SelectedObject.Item;
+            float baseY = m_SelectedObject.BaseWorldY;
             Vector3 offset = m_SelectedObject.transform.right * (item.Footprint.x + 0.3f);
             Vector3 newPos = m_SelectedObject.transform.position + offset;
             Quaternion rot = m_SelectedObject.transform.rotation;
@@ -160,6 +161,8 @@ namespace ARSpace.UI
             {
                 await m_AnchorService.AttachToAnchorAsync(duplicateObj, new Pose(newPos, rot), null);
             }
+
+            duplicateObj.SnapBaseToHeight(baseY);
 
             GameEvents.RaiseObjectPlaced(duplicateGo);
             GameEvents.RaiseToastRequested($"Duplicated {item.DisplayName}");

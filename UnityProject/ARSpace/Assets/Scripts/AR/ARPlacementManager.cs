@@ -175,6 +175,10 @@ namespace ARSpace.AR
                     await m_AnchorService.AttachToAnchorAsync(placedObj, targetPose, targetPlane);
                 }
 
+                // Seat the model's lowest point exactly on the detected floor height, independent of
+                // where the prefab's pivot happens to sit.
+                placedObj.SnapBaseToHeight(targetPose.position.y);
+
                 // 5. Register in PlacedObjectRegistry and fire GameEvents.ObjectPlaced
                 GameEvents.RaiseObjectPlaced(instance);
                 GameEvents.RaiseToastRequested($"Placed {item.DisplayName}");

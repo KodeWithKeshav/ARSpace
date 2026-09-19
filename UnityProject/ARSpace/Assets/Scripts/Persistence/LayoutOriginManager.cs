@@ -294,6 +294,8 @@ namespace ARSpace.Persistence
                     await anchorService.AttachToAnchorAsync(placedObj, new Pose(worldPos, worldRot), null);
                 }
 
+                placedObj.SnapBaseToHeight(worldPos.y);
+
                 GameEvents.RaiseObjectPlaced(instance);
                 restoredCount++;
             }

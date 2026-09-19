@@ -157,20 +157,28 @@ namespace ARSpace.Placement
             {
                 ARRaycastHit bestHit = default;
                 bool foundFloor = false;
+                bool bestIsEstimated = true;
 
+                // Prefer hits against a real detected plane over "estimated" ones (derived from feature
+                // points, whose height can be off by several centimetres and read as floating furniture).
                 for (int i = 0; i < s_Hits.Count; i++)
                 {
                     var hit = s_Hits[i];
                     if (hit.distance > m_MaxDistance)
                         continue;
 
-                    // Filter to horizontal-up floor planes
-                    if (hit.trackable is ARPlane plane && plane.alignment == PlaneAlignment.HorizontalUp)
+                    if (!(hit.trackable is ARPlane plane) || plane.alignment != PlaneAlignment.HorizontalUp)
+                        continue;
+
+                    bool isEstimated = hit.hitType == TrackableType.PlaneEstimated;
+                    if (!foundFloor || (bestIsEstimated && !isEstimated))
                     {
                         bestHit = hit;
+                        bestIsEstimated = isEstimated;
                         foundFloor = true;
                         CurrentPlane = plane;
-                        break;
+                        if (!isEstimated)
+                            break;
                     }
                 }
 

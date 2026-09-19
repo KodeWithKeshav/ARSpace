@@ -82,6 +82,41 @@ namespace ARSpace.Placement
             }
 
             m_PropertyBlock = new MaterialPropertyBlock();
+
+            if (GetComponent<ContactShadow>() == null)
+                gameObject.AddComponent<ContactShadow>();
+        }
+
+        /// <summary>World-space Y of the lowest visible point of the model (ignores overlays like the contact shadow).</summary>
+        public float BaseWorldY
+        {
+            get
+            {
+                bool found = false;
+                float minY = transform.position.y;
+                if (m_Renderers != null)
+                {
+                    for (int i = 0; i < m_Renderers.Length; i++)
+                    {
+                        var r = m_Renderers[i];
+                        if (r == null || !r.enabled) continue;
+                        float y = r.bounds.min.y;
+                        if (!found || y < minY) { minY = y; found = true; }
+                    }
+                }
+                return minY;
+            }
+        }
+
+        /// <summary>
+        /// Moves the object vertically so the lowest point of its model rests exactly on the given world height.
+        /// Guarantees furniture sits on the detected floor regardless of how the prefab pivot was authored.
+        /// </summary>
+        public void SnapBaseToHeight(float worldY)
+        {
+            float delta = worldY - BaseWorldY;
+            if (Mathf.Abs(delta) > 0.0005f)
+                transform.position += Vector3.up * delta;
         }
 
         /// <summary>

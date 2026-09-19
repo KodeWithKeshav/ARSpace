@@ -29,6 +29,11 @@ namespace ARSpace.Placement
         [SerializeField]
         Color m_ConflictColor = new Color(0.95f, 0.2f, 0.1f, 0.95f); // Red/Amber Conflict
 
+        [Header("Options")]
+        [Tooltip("Draw the outer circulation-clearance rectangle around the selected object. Off by default: it reads as stray lines around the furniture.")]
+        [SerializeField]
+        bool m_ShowClearance = false;
+
         PlacedObject m_CurrentTarget;
 
         readonly Vector3[] m_InnerPoints = new Vector3[5];
@@ -148,6 +153,7 @@ namespace ARSpace.Placement
 
             m_ClearanceRenderer.startColor = m_ClearanceColor;
             m_ClearanceRenderer.endColor = m_ClearanceColor;
+            m_ClearanceRenderer.enabled = m_ShowClearance;
         }
 
         void OnSelectionChanged(GameObject selectedGo)
@@ -172,8 +178,8 @@ namespace ARSpace.Placement
         {
             if (m_FootprintRenderer != null && m_FootprintRenderer.enabled != visible)
                 m_FootprintRenderer.enabled = visible;
-            if (m_ClearanceRenderer != null && m_ClearanceRenderer.enabled != visible)
-                m_ClearanceRenderer.enabled = visible;
+            if (m_ClearanceRenderer != null && m_ClearanceRenderer.enabled != (visible && m_ShowClearance))
+                m_ClearanceRenderer.enabled = visible && m_ShowClearance;
         }
     }
 }

@@ -12,6 +12,7 @@ namespace ARSpace.Furniture
         Reception,
         Partitions,
         Decor,
-        Equipment
+        Equipment,
+        Seating
     }
 }

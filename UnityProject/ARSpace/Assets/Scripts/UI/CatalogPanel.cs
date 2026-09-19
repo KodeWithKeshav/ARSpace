@@ -9,24 +9,51 @@ using ARSpace.Furniture;
 namespace ARSpace.UI
 {
     /// <summary>
-    /// Builds the furniture catalogue drawer at runtime from <see cref="CatalogService"/>'s
-    /// <see cref="FurnitureDatabase"/> and raises <see cref="GameEvents.FurnitureSelected"/>
-    /// when an item button is tapped. Highlights the currently selected item.
+    /// Furniture catalogue bottom sheet: category chips + a horizontally scrolling row of item cards,
+    /// built at runtime from <see cref="CatalogService"/>'s <see cref="FurnitureDatabase"/>.
+    /// Tapping a card raises <see cref="GameEvents.FurnitureSelected"/>.
     /// </summary>
     public class CatalogPanel : MonoBehaviour
     {
+        [Header("Containers")]
         [SerializeField] RectTransform m_Content;
+        [SerializeField] RectTransform m_ChipContent;
+        [SerializeField] ScrollRect m_CardScroll;
+        [SerializeField] TextMeshProUGUI m_CountText;
 
-        [Header("Card Style (assigned by the scene builder)")]
-        [Tooltip("Rounded-corner sprite used for every card background. Runtime code cannot load Editor built-in resources itself.")]
-        [SerializeField] Sprite m_CardSprite;
+        [Header("Style (assigned by the scene builder)")]
+        [SerializeField] Sprite m_RoundedSprite;
 
-        [SerializeField] Color m_NormalColor = new Color(0.14f, 0.15f, 0.18f, 0.92f);
-        [SerializeField] Color m_SelectedColor = new Color(1.0f, 0.42f, 0.0f, 1f);
-        [SerializeField] Color m_NormalTextColor = new Color(0.92f, 0.93f, 0.95f, 1f);
-        [SerializeField] Color m_SelectedTextColor = Color.white;
+        const float CardWidth = 178f;
+        const float CardHeight = 232f;
 
-        readonly List<(string id, Image bg, TextMeshProUGUI label)> m_Buttons = new List<(string, Image, TextMeshProUGUI)>();
+        static readonly FurnitureCategory[] s_CategoryOrder =
+        {
+            FurnitureCategory.Workstations, FurnitureCategory.Seating, FurnitureCategory.ConferenceTables,
+            FurnitureCategory.ExecutiveCabins, FurnitureCategory.Reception, FurnitureCategory.Cafeteria,
+            FurnitureCategory.Partitions, FurnitureCategory.Equipment, FurnitureCategory.Decor
+        };
+
+        class CardView
+        {
+            public FurnitureItem Item;
+            public GameObject Root;
+            public Image Background;
+            public TextMeshProUGUI Name;
+            public TextMeshProUGUI Subtitle;
+        }
+
+        class ChipView
+        {
+            public FurnitureCategory? Category;
+            public Image Background;
+            public TextMeshProUGUI Label;
+        }
+
+        readonly List<CardView> m_Cards = new List<CardView>();
+        readonly List<ChipView> m_Chips = new List<ChipView>();
+        FurnitureCategory? m_Filter;
+        string m_SelectedId;
 
         void OnEnable()
         {
@@ -48,101 +75,230 @@ namespace ARSpace.UI
             CatalogService catalogService = ServiceLocator.Get<CatalogService>();
             if (catalogService == null || catalogService.Database == null)
             {
-                Debug.LogWarning("[CatalogPanel] No CatalogService/FurnitureDatabase available — catalogue drawer will be empty.");
+                Debug.LogWarning("[CatalogPanel] No CatalogService/FurnitureDatabase available — catalogue will be empty.");
                 yield break;
             }
 
-            BuildButtons(catalogService.Database);
+            Build(catalogService.Database);
         }
 
-        void BuildButtons(FurnitureDatabase database)
+        void Build(FurnitureDatabase database)
         {
             if (m_Content == null)
             {
-                Debug.LogError("[CatalogPanel] Content container not assigned.");
+                Debug.LogError("[CatalogPanel] Card container not assigned.");
                 return;
             }
 
+            var present = new HashSet<FurnitureCategory>();
             foreach (var item in database.Items)
             {
                 if (item == null || string.IsNullOrEmpty(item.Id))
                     continue;
 
-                CreateButton(item);
+                present.Add(item.Category);
+                CreateCard(item);
+            }
+
+            if (m_ChipContent != null)
+            {
+                CreateChip(null, "All");
+                foreach (var cat in s_CategoryOrder)
+                {
+                    if (present.Remove(cat))
+                        CreateChip(cat, CategoryLabel(cat));
+                }
+                foreach (var leftover in present)
+                    CreateChip(leftover, CategoryLabel(leftover));
+            }
+
+            ApplyFilter(null);
+        }
+
+        static string CategoryLabel(FurnitureCategory cat)
+        {
+            switch (cat)
+            {
+                case FurnitureCategory.Workstations: return "Workstations";
+                case FurnitureCategory.Seating: return "Seating";
+                case FurnitureCategory.ConferenceTables: return "Meeting";
+                case FurnitureCategory.ExecutiveCabins: return "Executive";
+                case FurnitureCategory.Reception: return "Reception";
+                case FurnitureCategory.Cafeteria: return "Cafeteria";
+                case FurnitureCategory.Partitions: return "Booths";
+                case FurnitureCategory.Equipment: return "Equipment";
+                case FurnitureCategory.Decor: return "Decor";
+                default: return cat.ToString();
             }
         }
 
-        void CreateButton(FurnitureItem item)
+        // ── Chips ──────────────────────────────────────────────
+
+        void CreateChip(FurnitureCategory? category, string label)
+        {
+            var go = new GameObject($"Chip_{label}", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
+            var rect = (RectTransform)go.transform;
+            rect.SetParent(m_ChipContent, false);
+
+            var bg = go.GetComponent<Image>();
+            UiStyle.Round(bg, m_RoundedSprite, 30f);
+
+            var text = CreateLabel(rect, "Label", label, 24, FontStyles.Bold, TextAlignmentOptions.Center);
+            var textRect = text.rectTransform;
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = new Vector2(26, 0);
+            textRect.offsetMax = new Vector2(-26, 0);
+            text.enableWordWrapping = false;
+            text.overflowMode = TextOverflowModes.Overflow;
+
+            // Width follows the label so short and long category names both look balanced.
+            var layout = go.GetComponent<LayoutElement>();
+            layout.preferredHeight = 60;
+            layout.preferredWidth = Mathf.Max(96f, text.GetPreferredValues(label).x + 52f);
+
+            var view = new ChipView { Category = category, Background = bg, Label = text };
+            m_Chips.Add(view);
+
+            go.GetComponent<Button>().onClick.AddListener(() => ApplyFilter(category));
+        }
+
+        void ApplyFilter(FurnitureCategory? category)
+        {
+            m_Filter = category;
+
+            int visible = 0;
+            foreach (var card in m_Cards)
+            {
+                bool show = !category.HasValue || card.Item.Category == category.Value;
+                card.Root.SetActive(show);
+                if (show) visible++;
+            }
+
+            foreach (var chip in m_Chips)
+            {
+                bool active = chip.Category == category;
+                chip.Background.color = active ? UiStyle.Primary : UiStyle.Chip;
+                chip.Label.color = active ? Color.white : UiStyle.TextMuted;
+            }
+
+            if (m_CountText != null)
+                m_CountText.text = visible == 1 ? "1 item" : $"{visible} items";
+
+            if (m_CardScroll != null)
+                m_CardScroll.horizontalNormalizedPosition = 0f;
+        }
+
+        // ── Cards ──────────────────────────────────────────────
+
+        void CreateCard(FurnitureItem item)
         {
             var go = new GameObject(item.DisplayName, typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
             var rect = (RectTransform)go.transform;
             rect.SetParent(m_Content, false);
-            rect.sizeDelta = new Vector2(150, 150);
 
-            // HorizontalLayoutGroup on the content container ignores plain sizeDelta for
-            // non-expanding children, so a LayoutElement is required to hold the button size.
-            var layoutElement = go.GetComponent<LayoutElement>();
-            layoutElement.preferredWidth = 150;
-            layoutElement.preferredHeight = 150;
+            // HorizontalLayoutGroup ignores plain sizeDelta for non-expanding children.
+            var layout = go.GetComponent<LayoutElement>();
+            layout.preferredWidth = CardWidth;
+            layout.preferredHeight = CardHeight;
 
             var bg = go.GetComponent<Image>();
-            bg.color = m_NormalColor;
-            if (m_CardSprite != null)
-            {
-                bg.sprite = m_CardSprite;
-                bg.type = Image.Type.Sliced;
-            }
+            UiStyle.Round(bg, m_RoundedSprite, 30f);
+            bg.color = UiStyle.Card;
+
+            // Light thumbnail tile so the studio-lit renders read clearly on the dark card.
+            var tileGo = new GameObject("Tile", typeof(RectTransform), typeof(Image));
+            var tileRect = (RectTransform)tileGo.transform;
+            tileRect.SetParent(rect, false);
+            tileRect.anchorMin = new Vector2(0f, 0f);
+            tileRect.anchorMax = new Vector2(1f, 1f);
+            tileRect.offsetMin = new Vector2(10, 84);
+            tileRect.offsetMax = new Vector2(-10, -10);
+            var tile = tileGo.GetComponent<Image>();
+            UiStyle.Round(tile, m_RoundedSprite, 22f);
+            tile.color = UiStyle.Tile;
+            tile.raycastTarget = false;
 
             var iconGo = new GameObject("Icon", typeof(RectTransform), typeof(Image));
             var iconRect = (RectTransform)iconGo.transform;
-            iconRect.SetParent(rect, false);
-            iconRect.anchorMin = new Vector2(0.14f, 0.34f);
-            iconRect.anchorMax = new Vector2(0.86f, 0.90f);
-            iconRect.offsetMin = Vector2.zero;
-            iconRect.offsetMax = Vector2.zero;
+            iconRect.SetParent(tileRect, false);
+            iconRect.anchorMin = Vector2.zero;
+            iconRect.anchorMax = Vector2.one;
+            iconRect.offsetMin = new Vector2(6, 6);
+            iconRect.offsetMax = new Vector2(-6, -6);
             var icon = iconGo.GetComponent<Image>();
             icon.sprite = item.Thumbnail;
             icon.preserveAspect = true;
+            icon.raycastTarget = false;
+            icon.enabled = item.Thumbnail != null;
 
-            var labelGo = new GameObject("Label", typeof(RectTransform));
-            var labelRect = (RectTransform)labelGo.transform;
-            labelRect.SetParent(rect, false);
-            labelRect.anchorMin = new Vector2(0.04f, 0.06f);
-            labelRect.anchorMax = new Vector2(0.96f, 0.30f);
-            labelRect.offsetMin = Vector2.zero;
-            labelRect.offsetMax = Vector2.zero;
-            var label = labelGo.AddComponent<TextMeshProUGUI>();
-            label.text = item.DisplayName;
-            label.fontSize = 19;
-            label.alignment = TextAlignmentOptions.Center;
-            label.color = m_NormalTextColor;
-            label.enableWordWrapping = true;
-            label.overflowMode = TextOverflowModes.Ellipsis;
+            var name = CreateLabel(rect, "Name", item.DisplayName, 22, FontStyles.Bold, TextAlignmentOptions.Left);
+            var nameRect = name.rectTransform;
+            nameRect.anchorMin = new Vector2(0f, 0f);
+            nameRect.anchorMax = new Vector2(1f, 0f);
+            nameRect.pivot = new Vector2(0.5f, 0f);
+            nameRect.sizeDelta = new Vector2(-28, 34);
+            nameRect.anchoredPosition = new Vector2(0, 40);
+            name.enableWordWrapping = false;
+            name.overflowMode = TextOverflowModes.Ellipsis;
 
-            var button = go.GetComponent<Button>();
+            var sub = CreateLabel(rect, "Subtitle", Describe(item), 18, FontStyles.Normal, TextAlignmentOptions.Left);
+            var subRect = sub.rectTransform;
+            subRect.anchorMin = new Vector2(0f, 0f);
+            subRect.anchorMax = new Vector2(1f, 0f);
+            subRect.pivot = new Vector2(0.5f, 0f);
+            subRect.sizeDelta = new Vector2(-28, 28);
+            subRect.anchoredPosition = new Vector2(0, 12);
+            sub.enableWordWrapping = false;
+            sub.overflowMode = TextOverflowModes.Ellipsis;
+
             string id = item.Id;
-            button.onClick.AddListener(() => GameEvents.RaiseFurnitureSelected(id));
+            go.GetComponent<Button>().onClick.AddListener(() => GameEvents.RaiseFurnitureSelected(id));
 
-            m_Buttons.Add((id, bg, label));
+            m_Cards.Add(new CardView { Item = item, Root = go, Background = bg, Name = name, Subtitle = sub });
+            ApplyCardState(m_Cards[m_Cards.Count - 1], false);
+        }
+
+        static string Describe(FurnitureItem item)
+        {
+            Vector2 fp = item.Footprint;
+            string size = $"{fp.x:0.0} × {fp.y:0.0} m";
+            return item.SeatCount > 0 ? $"{item.SeatCount} seat{(item.SeatCount > 1 ? "s" : "")} · {size}" : size;
+        }
+
+        static TextMeshProUGUI CreateLabel(Transform parent, string name, string text, float size, FontStyles style, TextAlignmentOptions align)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var tmp = go.AddComponent<TextMeshProUGUI>();
+            tmp.text = text;
+            tmp.fontSize = size;
+            tmp.fontStyle = style;
+            tmp.alignment = align;
+            tmp.color = UiStyle.TextPrimary;
+            tmp.raycastTarget = false;
+            return tmp;
+        }
+
+        void ApplyCardState(CardView card, bool selected)
+        {
+            card.Background.color = selected ? UiStyle.Primary : UiStyle.Card;
+            card.Name.color = UiStyle.TextPrimary;
+            card.Subtitle.color = selected ? new Color(1f, 1f, 1f, 0.9f) : UiStyle.TextMuted;
         }
 
         void OnFurnitureSelected(string itemId)
         {
-            foreach (var (id, bg, label) in m_Buttons)
-            {
-                bool selected = id == itemId;
-                if (bg != null) bg.color = selected ? m_SelectedColor : m_NormalColor;
-                if (label != null) label.color = selected ? m_SelectedTextColor : m_NormalTextColor;
-            }
+            m_SelectedId = itemId;
+            foreach (var card in m_Cards)
+                ApplyCardState(card, card.Item.Id == itemId);
         }
 
         void OnPlacementCancelled()
         {
-            foreach (var (_, bg, label) in m_Buttons)
-            {
-                if (bg != null) bg.color = m_NormalColor;
-                if (label != null) label.color = m_NormalTextColor;
-            }
+            m_SelectedId = null;
+            foreach (var card in m_Cards)
+                ApplyCardState(card, false);
         }
     }
 }
