@@ -115,6 +115,11 @@ namespace ARSpace.Placement
         public void SnapBaseToHeight(float worldY)
         {
             float delta = worldY - BaseWorldY;
+
+            // A wildly large correction means the renderer bounds are unreliable; leave the object where it is.
+            if (Mathf.Abs(delta) > 0.5f)
+                return;
+
             if (Mathf.Abs(delta) > 0.0005f)
                 transform.position += Vector3.up * delta;
         }

@@ -74,11 +74,8 @@ namespace ARSpace.AR
                 return;
 
             // Ensure touch is not over UI
-            if (UnityEngine.EventSystems.EventSystem.current != null &&
-                UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject(touch.finger.index))
-            {
+            if (UiPointer.IsOverUI(touch.screenPosition))
                 return;
-            }
 
             if (Camera.main == null)
                 return;

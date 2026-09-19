@@ -102,10 +102,8 @@ namespace ARSpace.Placement
         public bool ProcessTap(Vector2 screenPosition, int fingerId = 0)
         {
             // 1. Guard against UI clicks
-            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject(fingerId))
-            {
+            if (UiPointer.IsOverUI(screenPosition))
                 return false;
-            }
 
             if (m_MainCamera == null)
                 m_MainCamera = Camera.main;
@@ -136,6 +134,29 @@ namespace ARSpace.Placement
                 return true;
             }
 
+            return false;
+        }
+
+        /// <summary>True when the first placed object under the screen position is <paramref name="obj"/>.</summary>
+        public bool IsPointerOnObject(Vector2 screenPosition, PlacedObject obj)
+        {
+            if (obj == null)
+                return false;
+
+            if (m_MainCamera == null)
+                m_MainCamera = Camera.main;
+            if (m_MainCamera == null)
+                return false;
+
+            Ray ray = m_MainCamera.ScreenPointToRay(screenPosition);
+            RaycastHit[] hits = Physics.RaycastAll(ray, 20f, m_ObjectLayerMask, QueryTriggerInteraction.Ignore);
+            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            for (int i = 0; i < hits.Length; i++)
+            {
+                var placed = hits[i].collider.GetComponentInParent<PlacedObject>();
+                if (placed != null)
+                    return placed == obj;
+            }
             return false;
         }
 

@@ -25,6 +25,11 @@ namespace ARSpace.Placement
         [SerializeField]
         int m_MaxAnchors = 20;
 
+        [Header("Anchoring Mode")]
+        [Tooltip("When off (default), placed objects stay fixed at their exact world pose. Native AR anchors are only useful for long-running drift correction, and parenting objects to them caused furniture to float and swing with the camera on device.")]
+        [SerializeField]
+        bool m_UseNativeAnchors = false;
+
         [Header("AR Foundation Reference")]
         [SerializeField]
         ARAnchorManager m_AnchorManager;
@@ -78,6 +83,14 @@ namespace ARSpace.Placement
         {
             if (placedObj == null)
                 return null;
+
+            if (!m_UseNativeAnchors)
+            {
+                // World-locked placement: exactly at the requested pose, no parent that could move it.
+                placedObj.transform.SetParent(null, true);
+                placedObj.transform.SetPositionAndRotation(pose.position, pose.rotation);
+                return null;
+            }
 
             // 1. Check for an existing anchor cluster within the cluster threshold
             AnchorCluster bestCluster = FindNearbyCluster(pose.position, m_ClusterRadius);
