@@ -142,81 +142,170 @@ namespace ARSpace.Placement
                 return;
             }
 
-            // Raycast from screen center (or touch drag position)
-            Vector2 screenPoint = m_CustomScreenPosition ?? new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+            Pose floorPose;
+            ARPlane floorPlane;
+            bool found;
 
-            // Accept the plane's full tracked bounds/estimated extent, not just its (often still tiny,
-            // freshly-detected) boundary polygon — PlaneWithinPolygon alone routinely misses valid floor
-            // hits for the first several seconds of scanning, which reads to the user as "no floor found".
+            if (m_IsPinned)
+            {
+                // The user tapped a spot: keep the marker exactly there, world-locked, regardless of where the phone points.
+                floorPose = m_PinnedPose;
+                floorPlane = m_PinnedPlane;
+                found = true;
+            }
+            else
+            {
+                // Auto mode: follow whatever floor is under the screen centre.
+                Vector2 screenPoint = m_CustomScreenPosition ?? new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+                found = TryRaycastFloor(screenPoint, out floorPose, out floorPlane);
+                if (found)
+                    floorPose = new Pose(floorPose.position, FacingYaw(floorPose.position));
+            }
+
+            if (!found)
+            {
+                HasHit = false;
+                CurrentPlane = null;
+                SetVisible(false);
+                return;
+            }
+
+            HasHit = true;
+            CurrentPlane = floorPlane;
+
+            // Position hugs floor surface with slight 3mm offset to eliminate z-fighting
+            Vector3 reticlePos = floorPose.position + Vector3.up * 0.003f;
+            transform.SetPositionAndRotation(reticlePos, floorPose.rotation);
+            CurrentPose = new Pose(reticlePos, floorPose.rotation);
+
+            FurnitureItem selectedItem = m_CatalogService != null ? m_CatalogService.SelectedItem : null;
+            UpdateFootprint(selectedItem);
+            SetVisible(true);
+        }
+
+        // ── Tap-to-place ───────────────────────────────────────
+
+        /// <summary>True while the marker is pinned to a spot the user tapped.</summary>
+        public bool IsPinned => m_IsPinned;
+
+        bool m_IsPinned;
+        Pose m_PinnedPose;
+        ARPlane m_PinnedPlane;
+        float m_LastFailToastTime = -10f;
+
+        /// <summary>
+        /// Moves the marker to the floor point under a screen tap. Returns false (and tells the user) if no
+        /// detected floor is there. Ignored unless a catalogue item is being positioned.
+        /// </summary>
+        public bool TryPinAtScreenPoint(Vector2 screenPoint)
+        {
+            var app = ServiceLocator.Get<ARSpaceApp>();
+            bool placing = app != null && (app.CurrentState == AppState.PlacementPending || app.CurrentState == AppState.Browsing);
+            if (!placing || m_RaycastManager == null || m_MainCamera == null)
+                return false;
+
+            var catalog = ServiceLocator.Get<CatalogService>();
+            if (catalog == null || !catalog.HasSelection)
+                return false;
+
+            if (!TryRaycastFloor(screenPoint, out Pose hitPose, out ARPlane plane))
+            {
+                if (Time.unscaledTime - m_LastFailToastTime > 2f)
+                {
+                    m_LastFailToastTime = Time.unscaledTime;
+                    GameEvents.RaiseToastRequested("No floor detected there yet — tap a spot where the floor grid shows.");
+                }
+                return false;
+            }
+
+            m_PinnedPose = new Pose(hitPose.position, FacingYaw(hitPose.position));
+            m_PinnedPlane = plane;
+            m_IsPinned = true;
+            return true;
+        }
+
+        /// <summary>Returns the marker to following the screen centre.</summary>
+        public void ClearPin()
+        {
+            m_IsPinned = false;
+            m_PinnedPlane = null;
+        }
+
+        void OnEnable()
+        {
+            GameEvents.FurnitureSelected += OnPlacementContextChanged;
+            GameEvents.PlacementCancelled += ClearPin;
+            GameEvents.ObjectPlaced += OnObjectPlaced;
+        }
+
+        void OnDisable()
+        {
+            GameEvents.FurnitureSelected -= OnPlacementContextChanged;
+            GameEvents.PlacementCancelled -= ClearPin;
+            GameEvents.ObjectPlaced -= OnObjectPlaced;
+        }
+
+        void OnPlacementContextChanged(string itemId) => ClearPin();
+        void OnObjectPlaced(GameObject placed) => ClearPin();
+
+        /// <summary>Yaw facing the user, snapped to the selected item's rotation increment.</summary>
+        Quaternion FacingYaw(Vector3 floorPoint)
+        {
+            FurnitureItem item = m_CatalogService != null ? m_CatalogService.SelectedItem : null;
+            float snapDegrees = item != null ? item.SnapRotationDegrees : 45f;
+
+            Vector3 lookDir = m_MainCamera.transform.position - floorPoint;
+            lookDir.y = 0f;
+            if (lookDir.sqrMagnitude <= 0.001f)
+                return Quaternion.identity;
+
+            float rawYaw = Quaternion.LookRotation(lookDir, Vector3.up).eulerAngles.y;
+            float snappedYaw = snapDegrees > 0f ? Mathf.Round(rawYaw / snapDegrees) * snapDegrees : rawYaw;
+            return Quaternion.Euler(0, snappedYaw, 0);
+        }
+
+        /// <summary>
+        /// Floor hit under a screen point. Accepts a plane's full tracked bounds/estimated extent, not just its
+        /// (often still tiny) boundary polygon, and prefers real planes over estimated ones.
+        /// </summary>
+        bool TryRaycastFloor(Vector2 screenPoint, out Pose pose, out ARPlane plane)
+        {
+            pose = default;
+            plane = null;
+
             const TrackableType floorTrackables = TrackableType.PlaneWithinPolygon
                 | TrackableType.PlaneWithinBounds
                 | TrackableType.PlaneWithinInfinity
                 | TrackableType.PlaneEstimated;
 
-            if (m_RaycastManager.Raycast(screenPoint, s_Hits, floorTrackables))
+            if (!m_RaycastManager.Raycast(screenPoint, s_Hits, floorTrackables))
+                return false;
+
+            bool found = false;
+            bool bestIsEstimated = true;
+
+            for (int i = 0; i < s_Hits.Count; i++)
             {
-                ARRaycastHit bestHit = default;
-                bool foundFloor = false;
-                bool bestIsEstimated = true;
+                var hit = s_Hits[i];
+                if (hit.distance > m_MaxDistance)
+                    continue;
 
-                // Prefer hits against a real detected plane over "estimated" ones (derived from feature
-                // points, whose height can be off by several centimetres and read as floating furniture).
-                for (int i = 0; i < s_Hits.Count; i++)
+                if (!(hit.trackable is ARPlane p) || p.alignment != PlaneAlignment.HorizontalUp)
+                    continue;
+
+                bool isEstimated = hit.hitType == TrackableType.PlaneEstimated;
+                if (!found || (bestIsEstimated && !isEstimated))
                 {
-                    var hit = s_Hits[i];
-                    if (hit.distance > m_MaxDistance)
-                        continue;
-
-                    if (!(hit.trackable is ARPlane plane) || plane.alignment != PlaneAlignment.HorizontalUp)
-                        continue;
-
-                    bool isEstimated = hit.hitType == TrackableType.PlaneEstimated;
-                    if (!foundFloor || (bestIsEstimated && !isEstimated))
-                    {
-                        bestHit = hit;
-                        bestIsEstimated = isEstimated;
-                        foundFloor = true;
-                        CurrentPlane = plane;
-                        if (!isEstimated)
-                            break;
-                    }
-                }
-
-                if (foundFloor)
-                {
-                    HasHit = true;
-
-                    // Compute yaw facing the user, snapped to item's snap increment
-                    FurnitureItem selectedItem = m_CatalogService != null ? m_CatalogService.SelectedItem : null;
-                    float snapDegrees = selectedItem != null ? selectedItem.SnapRotationDegrees : 45f;
-
-                    Vector3 camPos = m_MainCamera.transform.position;
-                    Vector3 lookDir = camPos - bestHit.pose.position;
-                    lookDir.y = 0f;
-
-                    Quaternion targetRot = Quaternion.identity;
-                    if (lookDir.sqrMagnitude > 0.001f)
-                    {
-                        float rawYaw = Quaternion.LookRotation(lookDir, Vector3.up).eulerAngles.y;
-                        float snappedYaw = Mathf.Round(rawYaw / snapDegrees) * snapDegrees;
-                        targetRot = Quaternion.Euler(0, snappedYaw, 0);
-                    }
-
-                    // Position hugs floor surface with slight 3mm offset to eliminate z-fighting
-                    Vector3 reticlePos = bestHit.pose.position + Vector3.up * 0.003f;
-                    transform.SetPositionAndRotation(reticlePos, targetRot);
-
-                    CurrentPose = new Pose(reticlePos, targetRot);
-
-                    // Update footprint rectangle & check validity
-                    UpdateFootprint(selectedItem);
-                    SetVisible(true);
-                    return;
+                    pose = hit.pose;
+                    plane = p;
+                    bestIsEstimated = isEstimated;
+                    found = true;
+                    if (!isEstimated)
+                        break;
                 }
             }
 
-            HasHit = false;
-            SetVisible(false);
+            return found;
         }
 
         void UpdateFootprint(FurnitureItem item)

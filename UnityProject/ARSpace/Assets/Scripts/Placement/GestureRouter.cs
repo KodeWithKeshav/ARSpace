@@ -189,7 +189,16 @@ namespace ARSpace.Placement
                     float duration = Time.unscaledTime - m_TouchStartTime;
                     bool moved = Vector2.Distance(position, m_TouchStartPos) > m_DragThresholdPixels;
                     if (duration <= m_MaxTapDuration && !moved && m_SelectionService != null)
-                        m_SelectionService.ProcessTap(position);
+                    {
+                        // A tap on furniture selects/deselects it; a tap on empty floor while positioning a
+                        // catalogue item moves the placement marker there.
+                        if (!m_SelectionService.ProcessTap(position))
+                        {
+                            var reticle = ServiceLocator.Get<PlacementReticle>();
+                            if (reticle != null)
+                                reticle.TryPinAtScreenPoint(position);
+                        }
+                    }
                 }
                 else if (m_CurrentMode == GestureMode.Dragging && m_Manipulator != null)
                 {

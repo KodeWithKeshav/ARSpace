@@ -99,9 +99,11 @@ namespace ARSpace.UI
             if (selected != null && state == AppState.PlacementPending)
             {
                 var reticle = ServiceLocator.Get<PlacementReticle>();
+                if (reticle != null && reticle.IsPinned)
+                    return $"Tap Place to put the {selected.DisplayName} on the marker  ·  tap elsewhere to move it";
                 return reticle != null && reticle.HasHit
-                    ? $"Tap Place to put the {selected.DisplayName} here"
-                    : $"Aim at the floor to position the {selected.DisplayName}";
+                    ? $"Tap the floor to choose a spot, or press Place at the circle"
+                    : $"Tap the floor grid to choose where the {selected.DisplayName} goes";
             }
 
             if (planes == 0 && placed == 0)
