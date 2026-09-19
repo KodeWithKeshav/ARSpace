@@ -56,12 +56,18 @@ namespace ARSpace.Placement
             m_SelectionService = ServiceLocator.Get<ObjectSelectionService>();
         }
 
+        float m_DragFloorY;
+        bool m_HasGrabOffset;
+        Vector3 m_GrabOffset;
+
         public void StartDrag(PlacedObject target)
         {
             if (target == null || target.IsLocked) return;
 
             m_ActiveObject = target;
             m_IsDragging = true;
+            m_HasGrabOffset = false;
+            m_DragFloorY = target.BaseWorldY;
         }
 
         public void OnDrag(Vector2 screenPosition)
@@ -69,33 +75,32 @@ namespace ARSpace.Placement
             if (!m_IsDragging || m_ActiveObject == null || m_ActiveObject.IsLocked)
                 return;
 
-            if (m_RaycastManager == null)
-                m_RaycastManager = FindFirstObjectByType<ARRaycastManager>();
-
-            if (m_RaycastManager == null)
+            Camera cam = Camera.main;
+            if (cam == null)
                 return;
 
-            if (m_RaycastManager.Raycast(screenPosition, s_Hits, TrackableType.PlaneWithinPolygon))
+            // The object already stands on the floor, so slide it along that horizontal plane. This works
+            // even where ARCore has not (yet) built a plane, and never lets the object leave the floor.
+            var floor = new Plane(Vector3.up, new Vector3(0f, m_DragFloorY, 0f));
+            Ray ray = cam.ScreenPointToRay(screenPosition);
+            if (!floor.Raycast(ray, out float distance))
+                return;
+
+            Vector3 hitPoint = ray.GetPoint(distance);
+            Transform t = m_ActiveObject.transform;
+
+            if (!m_HasGrabOffset)
             {
-                for (int i = 0; i < s_Hits.Count; i++)
-                {
-                    var hit = s_Hits[i];
-                    if (hit.trackable is ARPlane plane && plane.alignment == PlaneAlignment.HorizontalUp)
-                    {
-                        m_LastHitPlane = plane;
-
-                        // Maintain current yaw while updating X and Z positions
-                        // Keeps Y exactly at floor plane level
-                        Vector3 newPos = hit.pose.position;
-                        m_ActiveObject.transform.position = newPos;
-                        m_ActiveObject.SnapBaseToHeight(newPos.y);
-
-                        // Check collision conflict while dragging
-                        CheckCollisionFeedback(m_ActiveObject);
-                        break;
-                    }
-                }
+                m_GrabOffset = t.position - hitPoint;
+                m_GrabOffset.y = 0f;
+                m_HasGrabOffset = true;
             }
+
+            Vector3 target = hitPoint + m_GrabOffset;
+            t.position = new Vector3(target.x, t.position.y, target.z);
+            m_ActiveObject.SnapBaseToHeight(m_DragFloorY);
+
+            CheckCollisionFeedback(m_ActiveObject);
         }
 
         public async void EndDrag()
@@ -104,17 +109,18 @@ namespace ARSpace.Placement
                 return;
 
             m_IsDragging = false;
-            m_ActiveObject.SetConflictTint(false);
-
-            // Re-anchor object at its new position so ARCore tracking maintains stability
-            if (m_AnchorService != null && m_LastHitPlane != null)
-            {
-                Pose newPose = new Pose(m_ActiveObject.transform.position, m_ActiveObject.transform.rotation);
-                await m_AnchorService.AttachToAnchorAsync(m_ActiveObject, newPose, m_LastHitPlane);
-                Debug.Log($"[ObjectManipulator] Re-anchored '{m_ActiveObject.name}' at {newPose.position}");
-            }
-
+            var obj = m_ActiveObject;
             m_ActiveObject = null;
+            obj.SetConflictTint(false);
+
+            // Re-anchor at the new position so ARCore tracking keeps it stable.
+            if (m_AnchorService != null)
+            {
+                Pose newPose = new Pose(obj.transform.position, obj.transform.rotation);
+                await m_AnchorService.AttachToAnchorAsync(obj, newPose, null);
+                if (obj != null)
+                    obj.SnapBaseToHeight(m_DragFloorY);
+            }
         }
 
         public void StartTwistAndPinch(PlacedObject target)
