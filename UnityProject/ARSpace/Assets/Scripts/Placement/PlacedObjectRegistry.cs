@@ -66,7 +66,7 @@ namespace ARSpace.Placement
             {
                 m_UnusableSince = Time.unscaledTime;
             }
-            else if (!m_HiddenForTracking && Time.unscaledTime - m_UnusableSince > 0.4f && m_PlacedObjects.Count > 0)
+            else if (!m_HiddenForTracking && Time.unscaledTime - m_UnusableSince > 1.0f && m_PlacedObjects.Count > 0)
             {
                 SetObjectsVisible(false);
             }

@@ -47,6 +47,7 @@ namespace ARSpace.AR
         ARPlaneManager m_PlaneManager;
         ARRaycastManager m_RaycastManager;
         float m_NextPlaneCheck;
+        bool m_RebasedOnTracking;
 
         static readonly List<ARRaycastHit> s_Hits = new List<ARRaycastHit>();
 
@@ -62,12 +63,17 @@ namespace ARSpace.AR
 
             if (!HasFloor)
             {
-                if (ARSession.state != ARSessionState.SessionTracking)
-                    return;
-
                 FloorY = m_Camera.transform.position.y - m_AssumedCameraHeight;
                 Source = FloorSource.Assumed;
                 HasFloor = true;
+            }
+
+            // When tracking actually starts the camera pose can jump; re-base the untouched estimate once.
+            if (!m_RebasedOnTracking && ARSession.state == ARSessionState.SessionTracking)
+            {
+                m_RebasedOnTracking = true;
+                if (Source == FloorSource.Assumed)
+                    FloorY = m_Camera.transform.position.y - m_AssumedCameraHeight;
             }
 
             if (m_UseARCoreFloor && Source != FloorSource.Manual && Time.unscaledTime >= m_NextPlaneCheck)

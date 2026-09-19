@@ -67,6 +67,10 @@ namespace ARSpace.Placement
             m_MainCamera = Camera.main;
             m_RaycastManager = FindFirstObjectByType<ARRaycastManager>();
 
+            // Self-heal: make sure the virtual floor exists even if the scene predates it.
+            if (!ServiceLocator.TryGet(out ManualFloor _) && FindFirstObjectByType<ManualFloor>() == null)
+                gameObject.AddComponent<ManualFloor>();
+
             SetupRenderers();
         }
 
@@ -133,8 +137,7 @@ namespace ARSpace.Placement
             if (m_RaycastManager == null)
                 m_RaycastManager = FindFirstObjectByType<ARRaycastManager>();
 
-            var app = ServiceLocator.Get<ARSpaceApp>();
-            bool isPlacementState = app != null && (app.CurrentState == AppState.PlacementPending || app.CurrentState == AppState.Browsing);
+            bool isPlacementState = IsPlacementActive;
 
             bool hasManualFloor = ServiceLocator.TryGet(out ManualFloor updateFloor) && updateFloor.HasFloor;
             if (!isPlacementState || (m_RaycastManager == null && !hasManualFloor) || m_MainCamera == null)
@@ -175,7 +178,7 @@ namespace ARSpace.Placement
                     floorPose = new Pose(floorPose.position, FacingYaw(floorPose.position));
             }
 
-            if (!found || !TrackingStatus.IsUsable)
+            if (!found)
             {
                 HasHit = false;
                 CurrentPlane = null;
@@ -203,10 +206,12 @@ namespace ARSpace.Placement
         {
             get
             {
-                var app = ServiceLocator.Get<ARSpaceApp>();
-                bool placing = app != null && (app.CurrentState == AppState.PlacementPending || app.CurrentState == AppState.Browsing);
+                // Positioning is active whenever a catalogue item is chosen and no placed object is being edited.
+                // (Deliberately independent of the app state machine and of ARCore tracking state.)
                 var catalog = ServiceLocator.Get<CatalogService>();
-                return placing && catalog != null && catalog.HasSelection;
+                var selection = ServiceLocator.Get<ObjectSelectionService>();
+                bool editingObject = selection != null && selection.HasSelection;
+                return catalog != null && catalog.HasSelection && !editingObject;
             }
         }
 
@@ -229,16 +234,6 @@ namespace ARSpace.Placement
         {
             if (!IsPlacementActive || m_MainCamera == null)
                 return false;
-
-            if (!TrackingStatus.IsUsable)
-            {
-                if (Time.unscaledTime - m_LastFailToastTime > 2f)
-                {
-                    m_LastFailToastTime = Time.unscaledTime;
-                    GameEvents.RaiseToastRequested("Tracking is lost — move the phone slowly and show more of the room.");
-                }
-                return false;
-            }
 
             var manualFloor = ServiceLocator.TryGet(out ManualFloor mf) ? mf : null;
             if (manualFloor == null && m_RaycastManager == null)

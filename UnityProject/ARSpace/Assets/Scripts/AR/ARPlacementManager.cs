@@ -118,12 +118,6 @@ namespace ARSpace.AR
                 if (m_Registry == null)
                     m_Registry = ServiceLocator.Get<PlacedObjectRegistry>();
 
-                if (!TrackingStatus.IsUsable)
-                {
-                    GameEvents.RaiseToastRequested("Tracking is lost — move the phone slowly and show more of the room, then try again.");
-                    return null;
-                }
-
                 // 1. Resolve selected FurnitureItem
                 var item = m_CatalogService != null ? m_CatalogService.SelectedItem : null;
                 if (item == null)

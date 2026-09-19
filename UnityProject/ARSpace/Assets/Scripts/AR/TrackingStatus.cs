@@ -17,19 +17,9 @@ namespace ARSpace.AR
 #if UNITY_EDITOR
                 return true;
 #else
-                if (ARSession.state != ARSessionState.SessionTracking)
-                    return false;
-
-                switch (ARSession.notTrackingReason)
-                {
-                    case NotTrackingReason.Initializing:
-                    case NotTrackingReason.Relocalizing:
-                    case NotTrackingReason.CameraUnavailable:
-                    case NotTrackingReason.Unsupported:
-                        return false;
-                    default:
-                        return true;
-                }
+                // Only a hard loss of the session counts. "Limited" reasons (motion, low features...) are reported
+                // by ARCore even while poses are fine, and must never block the user.
+                return ARSession.state == ARSessionState.SessionTracking;
 #endif
             }
         }

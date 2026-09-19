@@ -26,7 +26,7 @@ namespace ARSpace.Placement
 
         [Tooltip("Maximum duration in seconds for a tap gesture.")]
         [SerializeField]
-        float m_MaxTapDuration = 0.35f;
+        float m_MaxTapDuration = 0.8f;
 
         ObjectSelectionService m_SelectionService;
         ObjectManipulator m_Manipulator;
