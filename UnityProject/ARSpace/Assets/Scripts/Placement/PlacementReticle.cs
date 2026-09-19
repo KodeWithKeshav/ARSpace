@@ -148,12 +148,23 @@ namespace ARSpace.Placement
             ARPlane floorPlane;
             bool found;
 
-            if (m_IsPinned)
+            if (!m_IsPinned && hasManualFloor)
+            {
+                // Manual mode: nothing is shown until the user taps a spot.
+                floorPose = default;
+                floorPlane = null;
+                found = false;
+            }
+            else if (m_IsPinned)
             {
                 // The user tapped a spot: keep the marker exactly there, world-locked, regardless of where the phone points.
                 floorPose = m_PinnedPose;
                 floorPlane = m_PinnedPlane;
                 found = true;
+
+                // Keep the marker on the virtual floor when its height is adjusted with Raise / Lower floor.
+                if (hasManualFloor)
+                    floorPose = new Pose(new Vector3(m_PinnedPose.position.x, updateFloor.FloorY, m_PinnedPose.position.z), m_PinnedPose.rotation);
             }
             else
             {
@@ -297,7 +308,7 @@ namespace ARSpace.Placement
             // Preferred: the virtual floor — works with no ARCore plane detection at all.
             if (ServiceLocator.TryGet(out ManualFloor manualFloor) && manualFloor.HasFloor)
             {
-                if (!manualFloor.TryRaycast(screenPoint, out Vector3 floorPoint))
+                if (!manualFloor.GetPoint(screenPoint, out Vector3 floorPoint))
                     return false;
 
                 pose = new Pose(floorPoint, Quaternion.identity);

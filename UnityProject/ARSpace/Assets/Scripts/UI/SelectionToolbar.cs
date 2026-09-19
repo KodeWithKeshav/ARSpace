@@ -200,7 +200,7 @@ namespace ARSpace.UI
 
         public void OnRotateClicked()
         {
-            if (m_SelectedObject == null || m_SelectedObject.IsLocked) return;
+            if (m_SelectedObject == null) return;
 
             Transform t = m_SelectedObject.transform;
             float newYaw = (t.eulerAngles.y + 90f) % 360f;

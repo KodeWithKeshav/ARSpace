@@ -137,7 +137,9 @@ namespace ARSpace.AR
                 // 2. Validate Reticle Hit
                 if (m_Reticle == null || !m_Reticle.HasHit)
                 {
-                    GameEvents.RaiseToastRequested("Aim at a detected floor surface to place.");
+                    GameEvents.RaiseToastRequested(ServiceLocator.TryGet(out ManualFloor _)
+                        ? "Tap on the floor first to choose where it goes."
+                        : "Aim at a detected floor surface to place.");
                     Debug.LogWarning("[ARPlacementManager] Placement rejected: Reticle has no valid floor hit.");
                     return null;
                 }
@@ -176,9 +178,12 @@ namespace ARSpace.AR
                 // where the prefab's pivot happens to sit.
                 placedObj.SnapBaseToHeight(targetPose.position.y);
 
+                // Fixed where it was put; tap the object and press Unlock to move it.
+                placedObj.SetLocked(true);
+
                 // 5. Register in PlacedObjectRegistry and fire GameEvents.ObjectPlaced
                 GameEvents.RaiseObjectPlaced(instance);
-                GameEvents.RaiseToastRequested($"Placed {item.DisplayName}");
+                GameEvents.RaiseToastRequested($"Placed {item.DisplayName} — locked in place");
 
                 Debug.Log($"[ARPlacementManager] ✓ Successfully placed '{item.DisplayName}' at {targetPose.position}.");
                 return placedObj;

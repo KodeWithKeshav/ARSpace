@@ -26,6 +26,9 @@ namespace ARSpace.AR
         [Tooltip("Farthest floor distance that can be targeted, in metres.")]
         [SerializeField] float m_MaxRayDistance = 5f;
 
+        [Tooltip("Off by default: the floor height is set only by the phone-height estimate and the Raise/Lower floor buttons. Turn on to let ARCore's own floor detection adjust it when available.")]
+        [SerializeField] bool m_UseARCoreFloor = false;
+
         [Tooltip("Minimum area (m²) for a detected ARCore plane to be trusted as the floor.")]
         [SerializeField] float m_MinPlaneArea = 0.4f;
 
@@ -67,7 +70,7 @@ namespace ARSpace.AR
                 HasFloor = true;
             }
 
-            if (Source != FloorSource.Manual && Time.unscaledTime >= m_NextPlaneCheck)
+            if (m_UseARCoreFloor && Source != FloorSource.Manual && Time.unscaledTime >= m_NextPlaneCheck)
             {
                 m_NextPlaneCheck = Time.unscaledTime + 0.5f;
                 UseLargestDetectedFloorPlane();
@@ -145,13 +148,42 @@ namespace ARSpace.AR
         }
 
         /// <summary>
+        /// A floor point for ANY screen tap — it never fails. Taps that land on the floor use the exact spot; taps
+        /// on walls, the sky or too far away are placed on the floor in that direction, 2 m in front of the phone.
+        /// </summary>
+        public bool GetPoint(Vector2 screenPoint, out Vector3 point)
+        {
+            point = default;
+            if (!HasFloor || m_Camera == null)
+                return false;
+
+            if (TryRaycast(screenPoint, out point))
+                return true;
+
+            Ray ray = m_Camera.ScreenPointToRay(screenPoint);
+            Vector3 flat = ray.direction;
+            flat.y = 0f;
+            if (flat.sqrMagnitude < 0.0001f)
+            {
+                flat = m_Camera.transform.forward;
+                flat.y = 0f;
+            }
+            if (flat.sqrMagnitude < 0.0001f)
+                flat = Vector3.forward;
+
+            Vector3 origin = m_Camera.transform.position;
+            point = new Vector3(origin.x, FloorY, origin.z) + flat.normalized * 2f;
+            return true;
+        }
+
+        /// <summary>
         /// Uses ARCore, if it can see the floor under a tap, to correct the floor height. Real plane hits are
         /// trusted; single feature points only nudge the estimate. Hits far from the current estimate are ignored
         /// so tapping a bed or table can't pull the floor upwards.
         /// </summary>
         public void RefineFromScreenPoint(Vector2 screenPoint)
         {
-            if (!HasFloor || Source == FloorSource.Manual)
+            if (!m_UseARCoreFloor || !HasFloor || Source == FloorSource.Manual)
                 return;
 
             if (m_RaycastManager == null)

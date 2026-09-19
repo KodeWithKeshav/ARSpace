@@ -102,14 +102,12 @@ namespace ARSpace.UI
                 if (selected != null && state == AppState.PlacementPending)
                 {
                     var markerReticle = ServiceLocator.Get<PlacementReticle>();
-                    if (markerReticle == null || !markerReticle.HasHit)
-                        return "Point the phone down at the floor";
-                    return markerReticle.IsPinned
+                    return markerReticle != null && markerReticle.IsPinned
                         ? $"Marker set  ·  drag to move it  ·  press Place for the {selected.DisplayName}"
-                        : $"Tap or drag on the floor to position the {selected.DisplayName}";
+                        : $"Tap anywhere on the floor to set where the {selected.DisplayName} goes";
                 }
 
-                return placed == 0 ? "Choose an item below, then tap the floor to position it" : string.Empty;
+                return placed == 0 ? "Choose an item below, then tap the floor to set its position" : string.Empty;
             }
 
             if (selected != null && state == AppState.PlacementPending)
