@@ -227,7 +227,6 @@ namespace ARSpace.UI
 
             duplicateObj.SnapBaseToHeight(baseY);
             duplicateObj.SetFloorWorldY(float.IsNaN(m_SelectedObject.FloorWorldY) ? baseY : m_SelectedObject.FloorWorldY);
-            duplicateObj.SetLocked(true);
 
             GameEvents.RaiseObjectPlaced(duplicateGo);
             GameEvents.RaiseToastRequested($"Duplicated {item.DisplayName}");

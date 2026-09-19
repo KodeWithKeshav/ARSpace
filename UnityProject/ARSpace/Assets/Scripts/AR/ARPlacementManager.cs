@@ -178,13 +178,11 @@ namespace ARSpace.AR
                 // where the prefab's pivot happens to sit.
                 placedObj.SnapBaseToHeight(targetPose.position.y);
 
-                // Fixed where it was put; tap the object and press Unlock to move it.
                 placedObj.SetFloorWorldY(targetPose.position.y);
-                placedObj.SetLocked(true);
 
                 // 5. Register in PlacedObjectRegistry and fire GameEvents.ObjectPlaced
                 GameEvents.RaiseObjectPlaced(instance);
-                GameEvents.RaiseToastRequested($"Placed {item.DisplayName} — locked in place");
+                GameEvents.RaiseToastRequested($"Placed {item.DisplayName}");
 
                 Debug.Log($"[ARPlacementManager] ✓ Successfully placed '{item.DisplayName}' at {targetPose.position}.");
                 return placedObj;

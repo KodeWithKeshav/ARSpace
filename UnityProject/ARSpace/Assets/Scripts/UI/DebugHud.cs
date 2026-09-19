@@ -36,7 +36,7 @@ namespace ARSpace.UI
             int planes = m_PlaneManager != null ? m_PlaneManager.trackables.count : -1;
 
             m_Text.text = $"{ARSession.state} · {ARSession.notTrackingReason} · usable {TrackingStatus.IsUsable}\n" +
-                          $"cam {camPos}\nplanes {planes} · floor {floor} · anchors {anchors}";
+                          $"cam {camPos} · src {ARCameraPoseDriver.Source}\nplanes {planes} · floor {floor} · anchors {anchors}";
         }
     }
 }

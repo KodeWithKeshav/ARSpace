@@ -50,6 +50,7 @@ namespace ARSpace.Placement
         }
 
         float m_UnusableSince = -1f;
+        float m_UsableSince = -1f;
         bool m_HiddenForTracking;
 
         void Update()
@@ -59,12 +60,17 @@ namespace ARSpace.Placement
             if (ARSpace.AR.TrackingStatus.IsUsable)
             {
                 m_UnusableSince = -1f;
-                if (m_HiddenForTracking)
+                if (m_UsableSince < 0f)
+                    m_UsableSince = Time.unscaledTime;
+
+                // Only re-show after tracking has been steady for a moment, so objects can't blink on and off.
+                if (m_HiddenForTracking && Time.unscaledTime - m_UsableSince > 0.6f)
                     SetObjectsVisible(true);
             }
             else if (m_UnusableSince < 0f)
             {
                 m_UnusableSince = Time.unscaledTime;
+                m_UsableSince = -1f;
             }
             else if (!m_HiddenForTracking && Time.unscaledTime - m_UnusableSince > 1.0f && m_PlacedObjects.Count > 0)
             {

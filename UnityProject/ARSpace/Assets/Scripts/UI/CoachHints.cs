@@ -95,7 +95,7 @@ namespace ARSpace.UI
                 var selection = ServiceLocator.Get<ObjectSelectionService>();
                 bool locked = selection != null && selection.SelectedObject != null && selection.SelectedObject.IsLocked;
                 return locked
-                    ? "Locked in place  ·  press Unlock to move, raise or resize it"
+                    ? "Locked  ·  press Unlock to move, raise or resize it"
                     : "Drag to move  ·  twist to rotate  ·  pinch to resize  ·  hold Up/Down for height";
             }
 
