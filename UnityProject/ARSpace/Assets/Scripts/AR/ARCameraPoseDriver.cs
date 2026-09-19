@@ -1,7 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
-using UnityEngine.XR;
 
 namespace ARSpace.AR
 {
@@ -106,12 +105,12 @@ namespace ARSpace.AR
             position = default;
             rotation = Quaternion.identity;
 
-            UnityEngine.XR.InputDevice device = InputDevices.GetDeviceAtXRNode(XRNode.CenterEye);
+            UnityEngine.XR.InputDevice device = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.CenterEye);
             if (!device.isValid)
                 return false;
 
-            return device.TryGetFeatureValue(CommonUsages.centerEyePosition, out position)
-                   && device.TryGetFeatureValue(CommonUsages.centerEyeRotation, out rotation);
+            return device.TryGetFeatureValue(UnityEngine.XR.CommonUsages.centerEyePosition, out position)
+                   && device.TryGetFeatureValue(UnityEngine.XR.CommonUsages.centerEyeRotation, out rotation);
         }
 
         void UseCustom(string source)
