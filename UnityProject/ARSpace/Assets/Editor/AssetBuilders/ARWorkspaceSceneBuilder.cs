@@ -239,6 +239,7 @@ namespace ARSpace.Editor.AssetBuilders
             root.AddComponent<AnchorService>();
             root.AddComponent<PlacedObjectRegistry>();
             root.AddComponent<PlaneVisibilityController>();
+            root.AddComponent<ManualFloor>();
             root.AddComponent<ObjectSelectionService>();
             root.AddComponent<GestureRouter>();
             root.AddComponent<ObjectManipulator>();
@@ -307,6 +308,7 @@ namespace ARSpace.Editor.AssetBuilders
             BuildCatalogSheet(safe);
             BuildSelectionCard(safe);
             BuildPlacementBar(safe);
+            BuildFloorAdjust(safe);
         }
 
         static void BuildTopHint(Transform parent)
@@ -631,6 +633,79 @@ namespace ARSpace.Editor.AssetBuilders
             AssignSerializedField(controls, "m_PlaceButton", placeBtn);
             AssignSerializedField(controls, "m_CancelButton", cancelBtn);
             AssignSerializedField(controls, "m_PlaceLabel", placeLabel);
+        }
+
+        static void BuildFloorAdjust(Transform parent)
+        {
+            const float rowHeight = 84f;
+            float rowBottom = SheetHeight + FloatingGap + ActionBarHeight + 14f;
+
+            // Script on an always-active holder; only the row is shown/hidden.
+            var holder = new GameObject("FloorAdjust", typeof(RectTransform), typeof(FloorAdjustControls));
+            var holderRect = (RectTransform)holder.transform;
+            holderRect.SetParent(parent, false);
+            Stretch(holderRect, 0, 0);
+
+            var row = new GameObject("Row", typeof(RectTransform), typeof(Image), typeof(HorizontalLayoutGroup));
+            var rowRect = (RectTransform)row.transform;
+            rowRect.SetParent(holderRect, false);
+            rowRect.anchorMin = new Vector2(0f, 0f);
+            rowRect.anchorMax = new Vector2(1f, 0f);
+            rowRect.pivot = new Vector2(0.5f, 0f);
+            rowRect.offsetMin = new Vector2(SideMargin, rowBottom);
+            rowRect.offsetMax = new Vector2(-SideMargin, rowBottom + rowHeight);
+
+            var rowImage = row.GetComponent<Image>();
+            UiStyle.Round(rowImage, s_Rounded, 42f);
+            rowImage.color = new Color(0.05f, 0.06f, 0.08f, 0.78f);
+            rowImage.raycastTarget = false;
+
+            var layout = row.GetComponent<HorizontalLayoutGroup>();
+            layout.padding = new RectOffset(28, 12, 10, 10);
+            layout.spacing = 12;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = true;
+            layout.childAlignment = TextAnchor.MiddleCenter;
+
+            TextMeshProUGUI status = CreateText(rowRect, "Status", 22, FontStyles.Normal, TextAlignmentOptions.Left, UiStyle.TextMuted);
+            status.enableWordWrapping = false;
+            status.overflowMode = TextOverflowModes.Ellipsis;
+            status.raycastTarget = false;
+            var statusLayout = status.gameObject.AddComponent<LayoutElement>();
+            statusLayout.flexibleWidth = 1;
+
+            HoldButton lower = CreateHoldButton(rowRect, "LowerButton", "Lower floor");
+            HoldButton raise = CreateHoldButton(rowRect, "RaiseButton", "Raise floor");
+
+            var controls = holder.GetComponent<FloorAdjustControls>();
+            AssignSerializedField(controls, "m_Row", row);
+            AssignSerializedField(controls, "m_LowerButton", lower);
+            AssignSerializedField(controls, "m_RaiseButton", raise);
+            AssignSerializedField(controls, "m_Status", status);
+        }
+
+        static HoldButton CreateHoldButton(Transform parent, string name, string label)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+            var rect = (RectTransform)go.transform;
+            rect.SetParent(parent, false);
+
+            var image = go.GetComponent<Image>();
+            UiStyle.Round(image, s_Rounded, 26f);
+            image.color = UiStyle.Secondary;
+
+            var layoutElement = go.AddComponent<LayoutElement>();
+            layoutElement.preferredWidth = 200;
+
+            TextMeshProUGUI text = CreateText(rect, "Label", 22, FontStyles.Bold, TextAlignmentOptions.Center, UiStyle.TextPrimary);
+            text.text = label;
+            text.raycastTarget = false;
+            text.enableWordWrapping = false;
+            Stretch(text.rectTransform, 8, 4);
+
+            return go.AddComponent<HoldButton>();
         }
 
         // ── Generic UI construction helpers ───────────────────

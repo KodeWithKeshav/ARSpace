@@ -31,7 +31,7 @@ namespace ARSpace.Placement
         ObjectSelectionService m_SelectionService;
         ObjectManipulator m_Manipulator;
 
-        enum GestureMode { None, TapPending, Dragging, MultiGesture }
+        enum GestureMode { None, TapPending, Dragging, MarkerDrag, MultiGesture }
         GestureMode m_CurrentMode = GestureMode.None;
 
         Vector2 m_TouchStartPos;
@@ -178,6 +178,22 @@ namespace ARSpace.Placement
 
             if (m_CurrentMode == GestureMode.Dragging && m_Manipulator != null)
                 m_Manipulator.OnDrag(position);
+
+            // While positioning a catalogue item, dragging on the floor slides the placement marker under the finger.
+            if (m_CurrentMode == GestureMode.TapPending && !m_TouchStartedOnSelected &&
+                Vector2.Distance(position, m_TouchStartPos) > m_DragThresholdPixels)
+            {
+                var reticle = ServiceLocator.Get<PlacementReticle>();
+                if (reticle != null && reticle.IsPlacementActive)
+                    m_CurrentMode = GestureMode.MarkerDrag;
+            }
+
+            if (m_CurrentMode == GestureMode.MarkerDrag)
+            {
+                var reticle = ServiceLocator.Get<PlacementReticle>();
+                if (reticle != null)
+                    reticle.TryPinAtScreenPoint(position, refineFloor: false);
+            }
         }
 
         void HandleRelease(Vector2 position)

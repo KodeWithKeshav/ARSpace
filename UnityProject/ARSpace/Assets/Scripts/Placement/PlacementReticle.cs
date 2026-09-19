@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 using Unity.Collections;
+using ARSpace.AR;
 using ARSpace.Core;
 using ARSpace.Furniture;
 
@@ -35,10 +36,10 @@ namespace ARSpace.Placement
 
         [Header("Colours")]
         [SerializeField]
-        Color m_ValidColor = new Color(0.2f, 0.9f, 0.5f, 0.85f);
+        Color m_ValidColor = new Color(1f, 1f, 1f, 1f); // multiplied by the orange outline material -> orange
 
         [SerializeField]
-        Color m_WarningColor = new Color(1.0f, 0.42f, 0.0f, 0.95f); // ARSpace orange
+        Color m_WarningColor = new Color(1f, 0.05f, 0.05f, 1f); // -> red
 
         // AR Services
         ARRaycastManager m_RaycastManager;
@@ -92,8 +93,8 @@ namespace ARSpace.Placement
             m_RingRenderer.loop = true;
             m_RingRenderer.useWorldSpace = false;
             m_RingRenderer.alignment = LineAlignment.TransformZ;
-            m_RingRenderer.startWidth = 0.005f;
-            m_RingRenderer.endWidth = 0.005f;
+            m_RingRenderer.startWidth = 0.012f;
+            m_RingRenderer.endWidth = 0.012f;
             m_RingRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             m_RingRenderer.receiveShadows = false;
 
@@ -118,8 +119,8 @@ namespace ARSpace.Placement
             m_FootprintRenderer.loop = true;
             m_FootprintRenderer.useWorldSpace = false;
             m_FootprintRenderer.alignment = LineAlignment.TransformZ;
-            m_FootprintRenderer.startWidth = 0.008f;
-            m_FootprintRenderer.endWidth = 0.008f;
+            m_FootprintRenderer.startWidth = 0.016f;
+            m_FootprintRenderer.endWidth = 0.016f;
             m_FootprintRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             m_FootprintRenderer.receiveShadows = false;
         }
@@ -135,7 +136,8 @@ namespace ARSpace.Placement
             var app = ServiceLocator.Get<ARSpaceApp>();
             bool isPlacementState = app != null && (app.CurrentState == AppState.PlacementPending || app.CurrentState == AppState.Browsing);
 
-            if (!isPlacementState || m_RaycastManager == null || m_MainCamera == null)
+            bool hasManualFloor = ServiceLocator.TryGet(out ManualFloor updateFloor) && updateFloor.HasFloor;
+            if (!isPlacementState || (m_RaycastManager == null && !hasManualFloor) || m_MainCamera == null)
             {
                 SetVisible(false);
                 HasHit = false;
@@ -185,6 +187,18 @@ namespace ARSpace.Placement
 
         // ── Tap-to-place ───────────────────────────────────────
 
+        /// <summary>True while a catalogue item is being positioned (marker active).</summary>
+        public bool IsPlacementActive
+        {
+            get
+            {
+                var app = ServiceLocator.Get<ARSpaceApp>();
+                bool placing = app != null && (app.CurrentState == AppState.PlacementPending || app.CurrentState == AppState.Browsing);
+                var catalog = ServiceLocator.Get<CatalogService>();
+                return placing && catalog != null && catalog.HasSelection;
+            }
+        }
+
         /// <summary>True while the marker is pinned to a spot the user tapped.</summary>
         public bool IsPinned => m_IsPinned;
 
@@ -200,23 +214,27 @@ namespace ARSpace.Placement
         /// Moves the marker to the floor point under a screen tap. Returns false (and tells the user) if no
         /// detected floor is there. Ignored unless a catalogue item is being positioned.
         /// </summary>
-        public bool TryPinAtScreenPoint(Vector2 screenPoint)
+        public bool TryPinAtScreenPoint(Vector2 screenPoint, bool refineFloor = true)
         {
-            var app = ServiceLocator.Get<ARSpaceApp>();
-            bool placing = app != null && (app.CurrentState == AppState.PlacementPending || app.CurrentState == AppState.Browsing);
-            if (!placing || m_RaycastManager == null || m_MainCamera == null)
+            if (!IsPlacementActive || m_MainCamera == null)
                 return false;
 
-            var catalog = ServiceLocator.Get<CatalogService>();
-            if (catalog == null || !catalog.HasSelection)
+            var manualFloor = ServiceLocator.TryGet(out ManualFloor mf) ? mf : null;
+            if (manualFloor == null && m_RaycastManager == null)
                 return false;
+
+            // If ARCore can see the floor at the tapped point, use it to correct the virtual floor's height.
+            if (manualFloor != null && refineFloor)
+                manualFloor.RefineFromScreenPoint(screenPoint);
 
             if (!TryRaycastFloor(screenPoint, out Pose hitPose, out ARPlane plane))
             {
                 if (Time.unscaledTime - m_LastFailToastTime > 2f)
                 {
                     m_LastFailToastTime = Time.unscaledTime;
-                    GameEvents.RaiseToastRequested("No floor detected there yet — tap a spot where the floor grid shows.");
+                    GameEvents.RaiseToastRequested(manualFloor != null
+                        ? "Point the phone down at the floor, then tap where the furniture should go."
+                        : "No floor detected there yet — tap a spot where the floor grid shows.");
                 }
                 return false;
             }
@@ -276,7 +294,17 @@ namespace ARSpace.Placement
             pose = default;
             plane = null;
 
-            // Only accept the detected floor patch itself (its outline or bounding rectangle). Infinite/estimated
+            // Preferred: the virtual floor — works with no ARCore plane detection at all.
+            if (ServiceLocator.TryGet(out ManualFloor manualFloor) && manualFloor.HasFloor)
+            {
+                if (!manualFloor.TryRaycast(screenPoint, out Vector3 floorPoint))
+                    return false;
+
+                pose = new Pose(floorPoint, Quaternion.identity);
+                return true;
+            }
+
+            // Fallback (no ManualFloor in the scene): only accept the detected floor patch itself (its outline or bounding rectangle). Infinite/estimated
             // planes extend the floor beyond walls, so a ray aimed at a wall "hit" floor on the far side of it and
             // furniture ended up metres away, behind the wall, looking like it floated on the wall.
             const TrackableType floorTrackables = TrackableType.PlaneWithinPolygon

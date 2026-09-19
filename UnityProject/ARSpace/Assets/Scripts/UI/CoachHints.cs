@@ -96,6 +96,22 @@ namespace ARSpace.UI
             var catalog = ServiceLocator.Get<CatalogService>();
             FurnitureItem selected = catalog != null ? catalog.SelectedItem : null;
 
+            // Manual floor mode: no scanning step — pick an item, tap/drag the marker onto the floor, press Place.
+            if (ServiceLocator.TryGet(out ARSpace.AR.ManualFloor manualFloor) && manualFloor.HasFloor)
+            {
+                if (selected != null && state == AppState.PlacementPending)
+                {
+                    var markerReticle = ServiceLocator.Get<PlacementReticle>();
+                    if (markerReticle == null || !markerReticle.HasHit)
+                        return "Point the phone down at the floor";
+                    return markerReticle.IsPinned
+                        ? $"Marker set  ·  drag to move it  ·  press Place for the {selected.DisplayName}"
+                        : $"Tap or drag on the floor to position the {selected.DisplayName}";
+                }
+
+                return placed == 0 ? "Choose an item below, then tap the floor to position it" : string.Empty;
+            }
+
             if (selected != null && state == AppState.PlacementPending)
             {
                 var reticle = ServiceLocator.Get<PlacementReticle>();
