@@ -49,6 +49,41 @@ namespace ARSpace.Placement
             GameEvents.TrackingRecovered -= OnTrackingRecovered;
         }
 
+        float m_UnusableSince = -1f;
+        bool m_HiddenForTracking;
+
+        void Update()
+        {
+            // While ARCore has lost tracking the virtual camera stops following the phone, so objects would appear
+            // glued to the screen and then jump when tracking returns. Hide them until the pose is trustworthy again.
+            if (ARSpace.AR.TrackingStatus.IsUsable)
+            {
+                m_UnusableSince = -1f;
+                if (m_HiddenForTracking)
+                    SetObjectsVisible(true);
+            }
+            else if (m_UnusableSince < 0f)
+            {
+                m_UnusableSince = Time.unscaledTime;
+            }
+            else if (!m_HiddenForTracking && Time.unscaledTime - m_UnusableSince > 0.4f && m_PlacedObjects.Count > 0)
+            {
+                SetObjectsVisible(false);
+            }
+        }
+
+        void SetObjectsVisible(bool visible)
+        {
+            m_HiddenForTracking = !visible;
+            for (int i = 0; i < m_PlacedObjects.Count; i++)
+            {
+                var obj = m_PlacedObjects[i];
+                if (obj == null) continue;
+                foreach (var r in obj.GetComponentsInChildren<Renderer>(true))
+                    r.enabled = visible;
+            }
+        }
+
         public PlacedObject GetById(string instanceId)
         {
             if (string.IsNullOrEmpty(instanceId)) return null;

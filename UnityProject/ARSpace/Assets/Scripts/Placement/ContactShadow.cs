@@ -15,6 +15,9 @@ namespace ARSpace.Placement
         const float FootprintPadding = 1.35f;
         const float LiftAboveBase = 0.004f;
 
+        Transform m_Shadow;
+        PlacedObject m_Owner;
+
         static Material s_Material;
         static Mesh s_Quad;
 
@@ -40,7 +43,9 @@ namespace ARSpace.Placement
                 size = box.size;
             }
 
+            m_Owner = GetComponent<PlacedObject>();
             var go = new GameObject("ContactShadow");
+            m_Shadow = go.transform;
             go.hideFlags = HideFlags.DontSave;
             go.transform.SetParent(transform, false);
             go.transform.localPosition = new Vector3(center.x, center.y - size.y * 0.5f + LiftAboveBase, center.z);
@@ -52,6 +57,17 @@ namespace ARSpace.Placement
             mr.sharedMaterial = s_Material;
             mr.shadowCastingMode = ShadowCastingMode.Off;
             mr.receiveShadows = false;
+        }
+
+        void LateUpdate()
+        {
+            // If the object has been lifted off the floor, keep its shadow on the floor.
+            if (m_Shadow != null && m_Owner != null && !float.IsNaN(m_Owner.FloorWorldY))
+            {
+                Vector3 p = m_Shadow.position;
+                p.y = m_Owner.FloorWorldY + LiftAboveBase;
+                m_Shadow.position = p;
+            }
         }
 
         static Mesh GetQuad()

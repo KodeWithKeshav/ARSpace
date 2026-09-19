@@ -63,6 +63,33 @@ namespace ARSpace.Editor.AssetBuilders
             return AssetDatabase.LoadAssetAtPath<Sprite>(RoundedSpritePath);
         }
 
+        public const string ReticleLineMaterialPath = "Assets/Art/Materials/M_ReticleLine.mat";
+
+        /// <summary>Line material whose colour comes entirely from each LineRenderer's own colours (white base).</summary>
+        public static Material EnsureReticleLineMaterial()
+        {
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(ReticleLineMaterialPath);
+            Shader shader = Shader.Find("ARSpace/UnlitLine");
+            if (shader == null)
+                return mat;
+
+            if (mat == null)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(ReticleLineMaterialPath));
+                mat = new Material(shader);
+                AssetDatabase.CreateAsset(mat, ReticleLineMaterialPath);
+            }
+            else
+            {
+                mat.shader = shader;
+            }
+
+            mat.SetColor("_BaseColor", Color.white);
+            EditorUtility.SetDirty(mat);
+            AssetDatabase.SaveAssets();
+            return mat;
+        }
+
         public static Material EnsureContactShadowMaterial()
         {
             var mat = AssetDatabase.LoadAssetAtPath<Material>(ContactShadowMaterialPath);

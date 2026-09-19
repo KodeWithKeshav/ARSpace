@@ -295,6 +295,7 @@ namespace ARSpace.Persistence
                 }
 
                 placedObj.SnapBaseToHeight(worldPos.y);
+                placedObj.SetFloorWorldY(worldPos.y);
 
                 GameEvents.RaiseObjectPlaced(instance);
                 restoredCount++;

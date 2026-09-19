@@ -118,6 +118,12 @@ namespace ARSpace.AR
                 if (m_Registry == null)
                     m_Registry = ServiceLocator.Get<PlacedObjectRegistry>();
 
+                if (!TrackingStatus.IsUsable)
+                {
+                    GameEvents.RaiseToastRequested("Tracking is lost — move the phone slowly and show more of the room, then try again.");
+                    return null;
+                }
+
                 // 1. Resolve selected FurnitureItem
                 var item = m_CatalogService != null ? m_CatalogService.SelectedItem : null;
                 if (item == null)
@@ -179,6 +185,7 @@ namespace ARSpace.AR
                 placedObj.SnapBaseToHeight(targetPose.position.y);
 
                 // Fixed where it was put; tap the object and press Unlock to move it.
+                placedObj.SetFloorWorldY(targetPose.position.y);
                 placedObj.SetLocked(true);
 
                 // 5. Register in PlacedObjectRegistry and fire GameEvents.ObjectPlaced

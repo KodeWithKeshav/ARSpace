@@ -36,10 +36,10 @@ namespace ARSpace.Placement
 
         [Header("Colours")]
         [SerializeField]
-        Color m_ValidColor = new Color(1f, 1f, 1f, 1f); // multiplied by the orange outline material -> orange
+        Color m_ValidColor = new Color(1.0f, 0.42f, 0.0f, 1f); // ARSpace orange
 
         [SerializeField]
-        Color m_WarningColor = new Color(1f, 0.05f, 0.05f, 1f); // -> red
+        Color m_WarningColor = new Color(1f, 0.12f, 0.10f, 1f); // red = blocked
 
         // AR Services
         ARRaycastManager m_RaycastManager;
@@ -175,7 +175,7 @@ namespace ARSpace.Placement
                     floorPose = new Pose(floorPose.position, FacingYaw(floorPose.position));
             }
 
-            if (!found)
+            if (!found || !TrackingStatus.IsUsable)
             {
                 HasHit = false;
                 CurrentPlane = null;
@@ -229,6 +229,16 @@ namespace ARSpace.Placement
         {
             if (!IsPlacementActive || m_MainCamera == null)
                 return false;
+
+            if (!TrackingStatus.IsUsable)
+            {
+                if (Time.unscaledTime - m_LastFailToastTime > 2f)
+                {
+                    m_LastFailToastTime = Time.unscaledTime;
+                    GameEvents.RaiseToastRequested("Tracking is lost — move the phone slowly and show more of the room.");
+                }
+                return false;
+            }
 
             var manualFloor = ServiceLocator.TryGet(out ManualFloor mf) ? mf : null;
             if (manualFloor == null && m_RaycastManager == null)

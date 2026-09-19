@@ -8,56 +8,41 @@ using ARSpace.Core;
 namespace ARSpace.Placement
 {
     /// <summary>
-    /// Service that manages the lifecycle of native AR anchors.
+    /// Ties every placed object to its own native AR anchor.
     ///
-    /// Implements nearby object clustering (objects within 1.5 m share an anchor)
-    /// to avoid exceeding ARCore's internal anchor performance threshold.
-    /// Automatically destroys anchors when their last child object is removed.
+    /// ARCore keeps refining its map of the room; when it corrects itself the phone's pose jumps. Anchors are
+    /// moved by ARCore together with that correction, so an anchored object stays on the same real-world spot,
+    /// whereas an object at fixed world coordinates appears to slide or float away. The object is parented to the
+    /// anchor at local identity, so it always sits exactly at the anchor.
+    /// If an anchor cannot be created the object simply stays fixed at its world pose.
     /// </summary>
     public class AnchorService : MonoBehaviour
     {
-        [Header("Clustering & Limits")]
-        [Tooltip("Maximum distance in metres between objects to share a common anchor.")]
+        [Tooltip("Attach objects to native AR anchors. Turn off only to debug.")]
         [SerializeField]
-        float m_ClusterRadius = 1.5f;
+        bool m_UseNativeAnchors = true;
 
         [Tooltip("Hard cap on native AR anchors to prevent ARCore tracking degradation.")]
         [SerializeField]
-        int m_MaxAnchors = 20;
-
-        [Header("Anchoring Mode")]
-        [Tooltip("When off (default), placed objects stay fixed at their exact world pose. Native AR anchors are only useful for long-running drift correction, and parenting objects to them caused furniture to float and swing with the camera on device.")]
-        [SerializeField]
-        bool m_UseNativeAnchors = false;
+        int m_MaxAnchors = 40;
 
         [Header("AR Foundation Reference")]
         [SerializeField]
         ARAnchorManager m_AnchorManager;
 
-        public class AnchorCluster
-        {
-            public ARAnchor Anchor;
-            public GameObject FallbackAnchorGo;
-            public Vector3 OriginPosition;
-            public readonly List<PlacedObject> Children = new List<PlacedObject>();
+        readonly Dictionary<PlacedObject, ARAnchor> m_Anchors = new Dictionary<PlacedObject, ARAnchor>();
+        readonly Dictionary<PlacedObject, int> m_Versions = new Dictionary<PlacedObject, int>();
 
-            public Transform AnchorTransform => Anchor != null ? Anchor.transform : FallbackAnchorGo.transform;
-        }
-
-        readonly List<AnchorCluster> m_Clusters = new List<AnchorCluster>();
-
-        public int ActiveAnchorCount => m_Clusters.Count;
-        public float ClusterRadius => m_ClusterRadius;
+        public int ActiveAnchorCount => m_Anchors.Count;
         public int MaxAnchors => m_MaxAnchors;
+        public bool UsingNativeAnchors => m_UseNativeAnchors && m_AnchorManager != null;
 
         void Awake()
         {
             ServiceLocator.Register(this);
 
             if (m_AnchorManager == null)
-            {
                 m_AnchorManager = FindFirstObjectByType<ARAnchorManager>();
-            }
         }
 
         void OnDestroy()
@@ -76,195 +61,100 @@ namespace ARSpace.Placement
         }
 
         /// <summary>
-        /// Attaches a placed object to an anchor at the specified pose on the plane.
-        /// Groups objects within <see cref="ClusterRadius"/> (1.5 m) under a shared anchor.
+        /// Fixes an object at <paramref name="pose"/> in the real world. Any previous anchor for the object is
+        /// replaced. Returns the anchor transform, or null when the object is left at fixed world coordinates.
         /// </summary>
         public async Awaitable<Transform> AttachToAnchorAsync(PlacedObject placedObj, Pose pose, ARPlane plane)
         {
             if (placedObj == null)
                 return null;
 
-            if (!m_UseNativeAnchors)
+            int version = m_Versions.TryGetValue(placedObj, out int v) ? v + 1 : 1;
+            m_Versions[placedObj] = version;
+
+            // Show it at the exact requested pose immediately, detached from any previous anchor.
+            placedObj.transform.SetParent(null, true);
+            placedObj.transform.SetPositionAndRotation(pose.position, pose.rotation);
+            ReleaseAnchor(placedObj);
+
+            if (!m_UseNativeAnchors || m_AnchorManager == null || m_Anchors.Count >= m_MaxAnchors)
+                return null;
+
+            ARAnchor anchor = null;
+            try
             {
-                // World-locked placement: exactly at the requested pose, no parent that could move it.
-                placedObj.transform.SetParent(null, true);
-                placedObj.transform.SetPositionAndRotation(pose.position, pose.rotation);
+                var result = await m_AnchorManager.TryAddAnchorAsync(pose);
+                if (result.status.IsSuccess())
+                    anchor = result.value;
+                else
+                    Debug.LogWarning($"[AnchorService] Anchor creation returned {result.status}; object stays at fixed world pose.");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[AnchorService] Anchor creation failed: {ex.Message}; object stays at fixed world pose.");
+            }
+
+            // Object destroyed, or a newer attach superseded this one, while awaiting.
+            if (placedObj == null || !m_Versions.TryGetValue(placedObj, out int current) || current != version)
+            {
+                if (anchor != null)
+                    Destroy(anchor.gameObject);
                 return null;
             }
 
-            // 1. Check for an existing anchor cluster within the cluster threshold
-            AnchorCluster bestCluster = FindNearbyCluster(pose.position, m_ClusterRadius);
+            if (anchor == null)
+                return null;
 
-            if (bestCluster != null)
-            {
-                // Attach as child of existing shared anchor
-                AttachObjectToCluster(placedObj, bestCluster, pose);
-                Debug.Log($"[AnchorService] Clustered '{placedObj.name}' under existing anchor (Distance: {Vector3.Distance(pose.position, bestCluster.OriginPosition):F2}m). Active anchors: {m_Clusters.Count}");
-                return bestCluster.AnchorTransform;
-            }
+            // A brand-new anchor can report a stale transform for a frame; pin it to the requested pose so
+            // the object never jumps, then parent at local identity.
+            anchor.transform.SetPositionAndRotation(pose.position, pose.rotation);
+            placedObj.transform.SetParent(anchor.transform, false);
+            placedObj.transform.localPosition = Vector3.zero;
+            placedObj.transform.localRotation = Quaternion.identity;
 
-            // 2. If max anchors reached, fallback to the closest existing cluster
-            if (m_Clusters.Count >= m_MaxAnchors && m_Clusters.Count > 0)
-            {
-                AnchorCluster nearest = FindNearbyCluster(pose.position, float.MaxValue);
-                if (nearest != null)
-                {
-                    AttachObjectToCluster(placedObj, nearest, pose);
-                    Debug.LogWarning($"[AnchorService] Max anchor cap ({m_MaxAnchors}) reached. Attached to nearest anchor.");
-                    return nearest.AnchorTransform;
-                }
-            }
-
-            // 3. Create a new anchor
-            var newCluster = await CreateNewClusterAsync(pose, plane);
-            AttachObjectToCluster(placedObj, newCluster, pose);
-            m_Clusters.Add(newCluster);
-
-            Debug.Log($"[AnchorService] Created new anchor cluster at {pose.position}. Total active anchors: {m_Clusters.Count}/{m_MaxAnchors}");
-            return newCluster.AnchorTransform;
+            m_Anchors[placedObj] = anchor;
+            return anchor.transform;
         }
 
-        AnchorCluster FindNearbyCluster(Vector3 position, float maxDistance)
+        void ReleaseAnchor(PlacedObject placedObj)
         {
-            AnchorCluster closest = null;
-            float closestDist = maxDistance;
-
-            for (int i = 0; i < m_Clusters.Count; i++)
+            if (placedObj != null && m_Anchors.TryGetValue(placedObj, out ARAnchor anchor))
             {
-                var cluster = m_Clusters[i];
-                if (cluster.AnchorTransform == null) continue;
-
-                float dist = Vector3.Distance(position, cluster.AnchorTransform.position);
-                if (dist < closestDist)
-                {
-                    closestDist = dist;
-                    closest = cluster;
-                }
+                m_Anchors.Remove(placedObj);
+                if (anchor != null)
+                    Destroy(anchor.gameObject);
             }
-
-            return closest;
-        }
-
-        void AttachObjectToCluster(PlacedObject placedObj, AnchorCluster cluster, Pose targetPose)
-        {
-            Transform anchorTrans = cluster.AnchorTransform;
-
-            // Keep target world position and rotation intact when parenting to anchor
-            placedObj.transform.SetPositionAndRotation(targetPose.position, targetPose.rotation);
-            placedObj.transform.SetParent(anchorTrans, true);
-
-            if (!cluster.Children.Contains(placedObj))
-            {
-                cluster.Children.Add(placedObj);
-            }
-        }
-
-        async Awaitable<AnchorCluster> CreateNewClusterAsync(Pose pose, ARPlane plane)
-        {
-            var cluster = new AnchorCluster
-            {
-                OriginPosition = pose.position
-            };
-
-            // Attempt 1: Attach anchor to hit plane (superior tracking for plane-bound objects)
-            if (m_AnchorManager != null && plane != null)
-            {
-                try
-                {
-                    cluster.Anchor = m_AnchorManager.AttachAnchor(plane, pose);
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogWarning($"[AnchorService] AttachAnchor to plane failed: {ex.Message}. Falling back to TryAddAnchorAsync.");
-                }
-            }
-
-            // Attempt 2: Add general async anchor
-            if (cluster.Anchor == null && m_AnchorManager != null)
-            {
-                try
-                {
-                    var result = await m_AnchorManager.TryAddAnchorAsync(pose);
-                    if (result.status.IsSuccess())
-                    {
-                        cluster.Anchor = result.value;
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"[AnchorService] TryAddAnchorAsync returned status: {result.status}");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogWarning($"[AnchorService] TryAddAnchorAsync exception: {ex.Message}");
-                }
-            }
-
-            // A freshly created anchor can report a stale (identity) transform for a frame or two.
-            // Children are parented with world-position-stays, so pin it to the requested pose now;
-            // otherwise the child would inherit the wrong local offset and drift/float once tracking corrects it.
-            if (cluster.Anchor != null)
-                cluster.Anchor.transform.SetPositionAndRotation(pose.position, pose.rotation);
-
-            // Attempt 3: Simulation or fallback anchor
-            if (cluster.Anchor == null)
-            {
-                var fallbackGo = new GameObject("SimulatedAnchor");
-                fallbackGo.transform.SetPositionAndRotation(pose.position, pose.rotation);
-                cluster.FallbackAnchorGo = fallbackGo;
-            }
-
-            return cluster;
         }
 
         void OnObjectRemoved(GameObject removedGo)
         {
-            if (removedGo == null) return;
+            if (removedGo == null)
+                return;
+
             var placedObj = removedGo.GetComponent<PlacedObject>();
-            if (placedObj == null) return;
+            if (placedObj == null)
+                return;
 
-            // Find cluster containing this object
-            for (int i = m_Clusters.Count - 1; i >= 0; i--)
+            m_Versions.Remove(placedObj);
+            if (m_Anchors.TryGetValue(placedObj, out ARAnchor anchor))
             {
-                var cluster = m_Clusters[i];
-                if (cluster.Children.Remove(placedObj))
-                {
-                    // If no children remain, destroy the anchor
-                    if (cluster.Children.Count == 0)
-                    {
-                        DestroyCluster(cluster);
-                        m_Clusters.RemoveAt(i);
-                        Debug.Log($"[AnchorService] Anchor destroyed after last child removed. Remaining anchors: {m_Clusters.Count}");
-                    }
-                    break;
-                }
+                m_Anchors.Remove(placedObj);
+                placedObj.transform.SetParent(null, true);
+                if (anchor != null)
+                    Destroy(anchor.gameObject);
             }
         }
 
-        void DestroyCluster(AnchorCluster cluster)
-        {
-            if (cluster.Anchor != null)
-            {
-                Destroy(cluster.Anchor.gameObject);
-                cluster.Anchor = null;
-            }
-            if (cluster.FallbackAnchorGo != null)
-            {
-                Destroy(cluster.FallbackAnchorGo);
-                cluster.FallbackAnchorGo = null;
-            }
-        }
-
-        /// <summary>
-        /// Clears and destroys all active anchors.
-        /// </summary>
+        /// <summary>Clears and destroys all active anchors.</summary>
         public void DestroyAllAnchors()
         {
-            for (int i = 0; i < m_Clusters.Count; i++)
+            foreach (var pair in m_Anchors)
             {
-                DestroyCluster(m_Clusters[i]);
+                if (pair.Value != null)
+                    Destroy(pair.Value.gameObject);
             }
-            m_Clusters.Clear();
+            m_Anchors.Clear();
+            m_Versions.Clear();
         }
     }
 }

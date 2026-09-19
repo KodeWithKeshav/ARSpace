@@ -90,6 +90,9 @@ namespace ARSpace.Editor.AssetBuilders
             }
 
             UiAssetBuilder.EnsureContactShadowMaterial();
+            Material lineMat = UiAssetBuilder.EnsureReticleLineMaterial();
+            if (lineMat != null)
+                outlineMat = lineMat;
 
             GameObject reticleGo = BuildPlacementReticle(outlineMat);
             BuildSelectionVisual(outlineMat);
@@ -158,6 +161,14 @@ namespace ARSpace.Editor.AssetBuilders
             }
 
             cam.tag = "MainCamera";
+
+#if ENABLE_INPUT_SYSTEM
+            // The template binds the pose driver's tracking-state input to an XR headset device that does not exist
+            // on a phone. Ignore that input so the camera always follows the AR device pose.
+            var poseDriver = cam.GetComponent<UnityEngine.InputSystem.XR.TrackedPoseDriver>();
+            if (poseDriver != null)
+                AssignSerializedBool(poseDriver, "m_IgnoreTrackingState", true);
+#endif
 
             if (cam.GetComponent<ARCameraManager>() == null)
                 cam.gameObject.AddComponent<ARCameraManager>();
@@ -274,7 +285,7 @@ namespace ARSpace.Editor.AssetBuilders
         const float SheetHiddenExtra = 80f;   // sheet is drawn this far below the screen so its bottom corners are never visible
         const float FloatingGap = 18f;
         const float ActionBarHeight = 104f;
-        const float SelectionCardHeight = 214f;
+        const float SelectionCardHeight = 310f;
         const float SideMargin = 32f;
 
         static Sprite s_Rounded;
@@ -344,8 +355,8 @@ namespace ARSpace.Editor.AssetBuilders
             hudRect.anchorMin = new Vector2(0.5f, 1f);
             hudRect.anchorMax = new Vector2(0.5f, 1f);
             hudRect.pivot = new Vector2(0.5f, 1f);
-            hudRect.sizeDelta = new Vector2(760, 52);
-            hudRect.anchoredPosition = new Vector2(0, -122);
+            hudRect.sizeDelta = new Vector2(900, 112);
+            hudRect.anchoredPosition = new Vector2(0, -120);
             var hudImage = hudGo.GetComponent<Image>();
             UiStyle.Round(hudImage, s_Rounded, 26f);
             hudImage.color = new Color(0f, 0f, 0f, 0.6f);
@@ -561,8 +572,8 @@ namespace ARSpace.Editor.AssetBuilders
             buttonsRect.anchorMin = new Vector2(0f, 0f);
             buttonsRect.anchorMax = new Vector2(1f, 0f);
             buttonsRect.pivot = new Vector2(0.5f, 0f);
-            buttonsRect.offsetMin = new Vector2(24, 22);
-            buttonsRect.offsetMax = new Vector2(-24, 122);
+            buttonsRect.offsetMin = new Vector2(24, 122);
+            buttonsRect.offsetMax = new Vector2(-24, 206);
             var buttonsLayout = buttonsGo.GetComponent<HorizontalLayoutGroup>();
             buttonsLayout.spacing = 12;
             buttonsLayout.childControlWidth = true;
@@ -578,7 +589,34 @@ namespace ARSpace.Editor.AssetBuilders
             TextMeshProUGUI lockText = lockBtn.GetComponentInChildren<TextMeshProUGUI>();
             Button deleteBtn = CreateButton(buttonsRect, "DeleteButton", "Delete", UiStyle.Danger, 24f, 23);
 
+            // Height row: press and hold to lift the object up or lower it back down.
+            var heightGo = new GameObject("HeightRow", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            var heightRect = (RectTransform)heightGo.transform;
+            heightRect.SetParent(rect, false);
+            heightRect.anchorMin = new Vector2(0f, 0f);
+            heightRect.anchorMax = new Vector2(1f, 0f);
+            heightRect.pivot = new Vector2(0.5f, 0f);
+            heightRect.offsetMin = new Vector2(24, 22);
+            heightRect.offsetMax = new Vector2(-24, 106);
+            var heightLayout = heightGo.GetComponent<HorizontalLayoutGroup>();
+            heightLayout.spacing = 12;
+            heightLayout.childControlWidth = true;
+            heightLayout.childControlHeight = true;
+            heightLayout.childForceExpandWidth = true;
+            heightLayout.childForceExpandHeight = true;
+
+            HoldButton upBtn = CreateHoldButton(heightRect, "UpButton", "Hold to move UP");
+            HoldButton downBtn = CreateHoldButton(heightRect, "DownButton", "Hold to move DOWN");
+            foreach (var hb in new[] { upBtn, downBtn })
+            {
+                var le = hb.GetComponent<LayoutElement>();
+                le.preferredWidth = -1;
+                le.flexibleWidth = 1;
+            }
+
             var toolbar = holder.GetComponent<SelectionToolbar>();
+            AssignSerializedField(toolbar, "m_UpButton", upBtn);
+            AssignSerializedField(toolbar, "m_DownButton", downBtn);
             AssignSerializedField(toolbar, "m_ToolbarPanel", go);
             AssignSerializedField(toolbar, "m_ItemNameText", itemName);
             AssignSerializedField(toolbar, "m_DimensionsText", dims);
@@ -759,6 +797,17 @@ namespace ARSpace.Editor.AssetBuilders
             rect.anchorMax = Vector2.one;
             rect.offsetMin = new Vector2(horizontalPadding, verticalPadding);
             rect.offsetMax = new Vector2(-horizontalPadding, -verticalPadding);
+        }
+
+        static void AssignSerializedBool(Object target, string fieldName, bool value)
+        {
+            var so = new SerializedObject(target);
+            SerializedProperty prop = so.FindProperty(fieldName);
+            if (prop == null)
+                return;
+
+            prop.boolValue = value;
+            so.ApplyModifiedProperties();
         }
 
         static void AssignSerializedField(Object target, string fieldName, Object value)

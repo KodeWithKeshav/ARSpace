@@ -48,6 +48,16 @@ namespace ARSpace.UI
         [SerializeField]
         TextMeshProUGUI m_LockStatusText;
 
+        [Header("Height (press and hold)")]
+        [SerializeField]
+        HoldButton m_UpButton;
+
+        [SerializeField]
+        HoldButton m_DownButton;
+
+        const float ElevationSpeed = 0.30f; // metres per second while held
+        bool m_WasAdjustingHeight;
+
         PlacedObject m_SelectedObject;
         ObjectSelectionService m_SelectionService;
         AnchorService m_AnchorService;
@@ -77,8 +87,57 @@ namespace ARSpace.UI
             m_AnchorService = ServiceLocator.Get<AnchorService>();
         }
 
+        void Update()
+        {
+            if (m_SelectedObject == null || m_SelectedObject.IsLocked)
+                return;
+
+            bool up = m_UpButton != null && m_UpButton.IsHeld;
+            bool down = m_DownButton != null && m_DownButton.IsHeld;
+
+            if (up || down)
+            {
+                float delta = (up ? 1f : 0f) - (down ? 1f : 0f);
+                Transform t = m_SelectedObject.transform;
+                t.position += Vector3.up * (delta * ElevationSpeed * Time.unscaledDeltaTime);
+
+                // Never sink below the floor the object was placed on.
+                float floor = m_SelectedObject.FloorWorldY;
+                if (!float.IsNaN(floor))
+                    m_SelectedObject.SnapBaseToHeightIfBelow(floor);
+
+                m_WasAdjustingHeight = true;
+            }
+            else if (m_WasAdjustingHeight)
+            {
+                // Released: fix it to the real world again at the new height.
+                m_WasAdjustingHeight = false;
+                ReanchorSelected();
+            }
+        }
+
+        async void ReanchorSelected()
+        {
+            var obj = m_SelectedObject;
+            if (obj == null) return;
+
+            if (m_AnchorService == null)
+                m_AnchorService = ServiceLocator.Get<AnchorService>();
+            if (m_AnchorService != null)
+                await m_AnchorService.AttachToAnchorAsync(obj, new Pose(obj.transform.position, obj.transform.rotation), null);
+        }
+
+        void OnHeightButtonPressed()
+        {
+            if (m_SelectedObject != null && m_SelectedObject.IsLocked)
+                GameEvents.RaiseToastRequested("Unlock the object first to move it up or down.");
+        }
+
         void WireButtons()
         {
+            if (m_UpButton != null) m_UpButton.Pressed += OnHeightButtonPressed;
+            if (m_DownButton != null) m_DownButton.Pressed += OnHeightButtonPressed;
+
             if (m_DuplicateButton != null)
                 m_DuplicateButton.onClick.AddListener(OnDuplicateClicked);
             if (m_DeleteButton != null)
@@ -124,7 +183,7 @@ namespace ARSpace.UI
                 m_DimensionsText.text = $"{size.x:F1}m × {size.z:F1}m × {size.y:F1}m";
 
             if (m_SeatCountText != null)
-                m_SeatCountText.text = seats > 0 ? $"{seats} Seats" : "0 Seats";
+                m_SeatCountText.text = m_SelectedObject.IsLocked ? "Locked" : (seats > 0 ? $"{seats} Seats" : "0 Seats");
 
             UpdateLockButtonText();
         }
@@ -135,6 +194,10 @@ namespace ARSpace.UI
             {
                 m_LockStatusText.text = m_SelectedObject.IsLocked ? "Unlock" : "Lock";
             }
+
+            // Orange while locked, so the state is obvious at a glance.
+            if (m_LockButton != null && m_LockButton.image != null && m_SelectedObject != null)
+                m_LockButton.image.color = m_SelectedObject.IsLocked ? UiStyle.Primary : UiStyle.Secondary;
         }
 
         public async void OnDuplicateClicked()
@@ -163,6 +226,8 @@ namespace ARSpace.UI
             }
 
             duplicateObj.SnapBaseToHeight(baseY);
+            duplicateObj.SetFloorWorldY(float.IsNaN(m_SelectedObject.FloorWorldY) ? baseY : m_SelectedObject.FloorWorldY);
+            duplicateObj.SetLocked(true);
 
             GameEvents.RaiseObjectPlaced(duplicateGo);
             GameEvents.RaiseToastRequested($"Duplicated {item.DisplayName}");
@@ -214,7 +279,15 @@ namespace ARSpace.UI
             if (m_SelectedObject == null || m_SelectedObject.IsLocked) return;
 
             m_SelectedObject.transform.localScale = Vector3.one;
-            GameEvents.RaiseToastRequested("Scale reset to 1.0x");
+
+            // Also put it back on the floor it was placed on.
+            if (!float.IsNaN(m_SelectedObject.FloorWorldY))
+            {
+                m_SelectedObject.SnapBaseToHeight(m_SelectedObject.FloorWorldY);
+                ReanchorSelected();
+            }
+
+            GameEvents.RaiseToastRequested("Size and height reset");
         }
 
         public void OnLockClicked()
@@ -223,9 +296,10 @@ namespace ARSpace.UI
 
             bool nextState = !m_SelectedObject.IsLocked;
             m_SelectedObject.SetLocked(nextState);
+            UpdateInfoRow();
             UpdateLockButtonText();
 
-            GameEvents.RaiseToastRequested(nextState ? "Object locked in place" : "Object unlocked");
+            GameEvents.RaiseToastRequested(nextState ? "Locked — fixed to this spot" : "Unlocked — you can move it now");
         }
 
         void SetVisible(bool visible)

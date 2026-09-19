@@ -27,6 +27,9 @@ namespace ARSpace.Placement
         Color m_ClearanceColor = new Color(1.0f, 0.65f, 0.2f, 0.6f);
 
         [SerializeField]
+        Color m_LockedColor = new Color(0.25f, 0.85f, 0.45f, 0.95f); // green = locked in place
+
+        [SerializeField]
         Color m_ConflictColor = new Color(0.95f, 0.2f, 0.1f, 0.95f); // Red/Amber Conflict
 
         [Header("Options")]
@@ -147,7 +150,7 @@ namespace ARSpace.Placement
             m_ClearanceRenderer.SetPositions(m_OuterPoints);
 
             // Update color based on conflict status
-            Color primaryColor = m_CurrentTarget.HasConflict ? m_ConflictColor : m_SelectedColor;
+            Color primaryColor = m_CurrentTarget.HasConflict ? m_ConflictColor : (m_CurrentTarget.IsLocked ? m_LockedColor : m_SelectedColor);
             m_FootprintRenderer.startColor = primaryColor;
             m_FootprintRenderer.endColor = primaryColor;
 

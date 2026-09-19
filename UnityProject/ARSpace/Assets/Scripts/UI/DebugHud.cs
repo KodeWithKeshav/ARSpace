@@ -3,25 +3,20 @@ using TMPro;
 using UnityEngine.XR.ARFoundation;
 using ARSpace.AR;
 using ARSpace.Core;
+using ARSpace.Placement;
 
 namespace ARSpace.UI
 {
     /// <summary>
-    /// Small always-on diagnostic readout (top-right corner) showing AR session state,
-    /// tracking guidance, and the raw detected plane count straight from ARPlaneManager.
-    /// This is a troubleshooting aid, not part of the polished UI — it exists so plane
-    /// detection failures can be diagnosed from a screenshot instead of guesswork.
+    /// Diagnostic readout (tap the top hint bar five times to show/hide): AR session state and tracking reason,
+    /// the virtual camera's world position (it should change as you walk — if it does not, camera tracking is
+    /// broken), detected plane count, floor height and anchor count.
     /// </summary>
     public class DebugHud : MonoBehaviour
     {
         [SerializeField] TextMeshProUGUI m_Text;
 
         ARPlaneManager m_PlaneManager;
-
-        void Start()
-        {
-            m_PlaneManager = FindFirstObjectByType<ARPlaneManager>();
-        }
 
         void Update()
         {
@@ -31,11 +26,17 @@ namespace ARSpace.UI
             if (m_PlaneManager == null)
                 m_PlaneManager = FindFirstObjectByType<ARPlaneManager>();
 
-            int planeCount = m_PlaneManager != null ? m_PlaneManager.trackables.count : -1;
-            string reason = ARSession.notTrackingReason.ToString();
+            Camera cam = Camera.main;
+            string camPos = cam != null
+                ? $"({cam.transform.position.x:0.00}, {cam.transform.position.y:0.00}, {cam.transform.position.z:0.00})"
+                : "n/a";
 
-            m_Text.text = $"AR: {ARSession.state}   Planes: {planeCount}" +
-                          (reason != "None" ? $"   ({reason})" : string.Empty);
+            string floor = ServiceLocator.TryGet(out ManualFloor mf) && mf.HasFloor ? $"{mf.FloorY:0.00} ({mf.Source})" : "-";
+            var anchors = ServiceLocator.TryGet(out AnchorService a) ? a.ActiveAnchorCount : 0;
+            int planes = m_PlaneManager != null ? m_PlaneManager.trackables.count : -1;
+
+            m_Text.text = $"{ARSession.state} · {ARSession.notTrackingReason} · usable {TrackingStatus.IsUsable}\n" +
+                          $"cam {camPos}\nplanes {planes} · floor {floor} · anchors {anchors}";
         }
     }
 }

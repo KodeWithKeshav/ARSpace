@@ -87,6 +87,11 @@ namespace ARSpace.Placement
                 gameObject.AddComponent<ContactShadow>();
         }
 
+        /// <summary>World height of the floor this object was placed on (NaN if unknown). Used to reset height and draw its floor shadow.</summary>
+        public float FloorWorldY { get; private set; } = float.NaN;
+
+        public void SetFloorWorldY(float y) => FloorWorldY = y;
+
         /// <summary>World-space Y of the lowest visible point of the model (ignores overlays like the contact shadow).</summary>
         public float BaseWorldY
         {
@@ -99,13 +104,21 @@ namespace ARSpace.Placement
                     for (int i = 0; i < m_Renderers.Length; i++)
                     {
                         var r = m_Renderers[i];
-                        if (r == null || !r.enabled) continue;
+                        if (r == null) continue;
                         float y = r.bounds.min.y;
                         if (!found || y < minY) { minY = y; found = true; }
                     }
                 }
                 return minY;
             }
+        }
+
+        /// <summary>Raises the object if its lowest point is below <paramref name="worldY"/>.</summary>
+        public void SnapBaseToHeightIfBelow(float worldY)
+        {
+            float delta = worldY - BaseWorldY;
+            if (delta > 0.0005f && delta < 0.5f)
+                transform.position += Vector3.up * delta;
         }
 
         /// <summary>

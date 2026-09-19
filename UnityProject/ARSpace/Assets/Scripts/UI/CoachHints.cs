@@ -91,7 +91,13 @@ namespace ARSpace.UI
             AppState state = app != null ? app.CurrentState : AppState.Initializing;
 
             if (state == AppState.ObjectSelected)
-                return "Drag to move  ·  twist to rotate  ·  pinch to resize";
+            {
+                var selection = ServiceLocator.Get<ObjectSelectionService>();
+                bool locked = selection != null && selection.SelectedObject != null && selection.SelectedObject.IsLocked;
+                return locked
+                    ? "Locked in place  ·  press Unlock to move, raise or resize it"
+                    : "Drag to move  ·  twist to rotate  ·  pinch to resize  ·  hold Up/Down for height";
+            }
 
             var catalog = ServiceLocator.Get<CatalogService>();
             FurnitureItem selected = catalog != null ? catalog.SelectedItem : null;
