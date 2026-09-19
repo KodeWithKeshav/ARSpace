@@ -188,6 +188,9 @@ namespace ARSpace.Placement
         /// <summary>True while the marker is pinned to a spot the user tapped.</summary>
         public bool IsPinned => m_IsPinned;
 
+        /// <summary>Furniture placed further away than this barely shows parallax and reads as floating.</summary>
+        const float MaxPlacementDistance = 5f;
+
         bool m_IsPinned;
         Pose m_PinnedPose;
         ARPlane m_PinnedPlane;
@@ -273,10 +276,11 @@ namespace ARSpace.Placement
             pose = default;
             plane = null;
 
+            // Only accept the detected floor patch itself (its outline or bounding rectangle). Infinite/estimated
+            // planes extend the floor beyond walls, so a ray aimed at a wall "hit" floor on the far side of it and
+            // furniture ended up metres away, behind the wall, looking like it floated on the wall.
             const TrackableType floorTrackables = TrackableType.PlaneWithinPolygon
-                | TrackableType.PlaneWithinBounds
-                | TrackableType.PlaneWithinInfinity
-                | TrackableType.PlaneEstimated;
+                | TrackableType.PlaneWithinBounds;
 
             if (!m_RaycastManager.Raycast(screenPoint, s_Hits, floorTrackables))
                 return false;
@@ -287,7 +291,7 @@ namespace ARSpace.Placement
             for (int i = 0; i < s_Hits.Count; i++)
             {
                 var hit = s_Hits[i];
-                if (hit.distance > m_MaxDistance)
+                if (hit.distance > Mathf.Min(m_MaxDistance, MaxPlacementDistance))
                     continue;
 
                 if (!(hit.trackable is ARPlane p) || p.alignment != PlaneAlignment.HorizontalUp)

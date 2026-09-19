@@ -87,6 +87,9 @@ namespace ARSpace.Placement
             if (!floor.Raycast(ray, out float distance))
                 return;
 
+            if (distance > 6f)
+                return;
+
             Vector3 hitPoint = ray.GetPoint(distance);
             Transform t = m_ActiveObject.transform;
 
