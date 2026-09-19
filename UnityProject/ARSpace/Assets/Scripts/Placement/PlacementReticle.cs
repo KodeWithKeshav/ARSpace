@@ -55,16 +55,6 @@ namespace ARSpace.Placement
         public ARPlane CurrentPlane { get; private set; }
         public string WarningMessage { get; private set; }
 
-        /// <summary>True when the current hit is an estimate (feature point / estimated plane) rather than a fully detected plane.</summary>
-        public bool IsEstimatedFloor { get; private set; }
-
-        const float HitHoldSeconds = 0.3f;
-        Pose m_LastPose;
-        ARPlane m_LastPlane;
-        bool m_LastEstimated;
-        bool m_HasLastHit;
-        float m_LastHitTime;
-
         Vector2? m_CustomScreenPosition = null;
 
         readonly Vector3[] m_RingPoints = new Vector3[32];
@@ -102,8 +92,8 @@ namespace ARSpace.Placement
             m_RingRenderer.loop = true;
             m_RingRenderer.useWorldSpace = false;
             m_RingRenderer.alignment = LineAlignment.TransformZ;
-            m_RingRenderer.startWidth = 0.012f;
-            m_RingRenderer.endWidth = 0.012f;
+            m_RingRenderer.startWidth = 0.005f;
+            m_RingRenderer.endWidth = 0.005f;
             m_RingRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             m_RingRenderer.receiveShadows = false;
 
@@ -128,8 +118,8 @@ namespace ARSpace.Placement
             m_FootprintRenderer.loop = true;
             m_FootprintRenderer.useWorldSpace = false;
             m_FootprintRenderer.alignment = LineAlignment.TransformZ;
-            m_FootprintRenderer.startWidth = 0.014f;
-            m_FootprintRenderer.endWidth = 0.014f;
+            m_FootprintRenderer.startWidth = 0.008f;
+            m_FootprintRenderer.endWidth = 0.008f;
             m_FootprintRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             m_FootprintRenderer.receiveShadows = false;
         }
@@ -155,127 +145,78 @@ namespace ARSpace.Placement
             // Raycast from screen center (or touch drag position)
             Vector2 screenPoint = m_CustomScreenPosition ?? new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
 
-            bool found = TryFindFloorHit(screenPoint, out Pose hitPose, out ARPlane hitPlane, out bool estimated);
-
-            // Hold the last good hit briefly so momentary tracking hiccups don't flicker the reticle.
-            if (found)
-            {
-                m_LastPose = hitPose;
-                m_LastPlane = hitPlane;
-                m_LastEstimated = estimated;
-                m_LastHitTime = Time.unscaledTime;
-                m_HasLastHit = true;
-            }
-            else if (m_HasLastHit && Time.unscaledTime - m_LastHitTime < HitHoldSeconds)
-            {
-                hitPose = m_LastPose;
-                hitPlane = m_LastPlane;
-                estimated = m_LastEstimated;
-                found = true;
-            }
-
-            if (!found)
-            {
-                HasHit = false;
-                CurrentPlane = null;
-                SetVisible(false);
-                return;
-            }
-
-            HasHit = true;
-            CurrentPlane = hitPlane;
-            IsEstimatedFloor = estimated;
-
-            // Compute yaw facing the user, snapped to item's snap increment
-            FurnitureItem selectedItem = m_CatalogService != null ? m_CatalogService.SelectedItem : null;
-            float snapDegrees = selectedItem != null ? selectedItem.SnapRotationDegrees : 45f;
-
-            Vector3 lookDir = m_MainCamera.transform.position - hitPose.position;
-            lookDir.y = 0f;
-
-            Quaternion targetRot = Quaternion.identity;
-            if (lookDir.sqrMagnitude > 0.001f)
-            {
-                float rawYaw = Quaternion.LookRotation(lookDir, Vector3.up).eulerAngles.y;
-                float snappedYaw = Mathf.Round(rawYaw / snapDegrees) * snapDegrees;
-                targetRot = Quaternion.Euler(0, snappedYaw, 0);
-            }
-
-            // Position hugs floor surface with slight 3mm offset to eliminate z-fighting
-            Vector3 reticlePos = hitPose.position + Vector3.up * 0.003f;
-            transform.SetPositionAndRotation(reticlePos, targetRot);
-            CurrentPose = new Pose(reticlePos, targetRot);
-
-            UpdateFootprint(selectedItem);
-            SetVisible(true);
-        }
-
-        /// <summary>
-        /// Finds the floor under the screen point. Preference order: real detected plane, estimated plane,
-        /// then an upward-facing feature point clearly below the camera. The feature-point fallback keeps
-        /// placement working while ARCore is still (slowly) building planes on shiny or low-texture floors.
-        /// </summary>
-        bool TryFindFloorHit(Vector2 screenPoint, out Pose pose, out ARPlane plane, out bool estimated)
-        {
-            pose = default;
-            plane = null;
-            estimated = false;
-
-            const TrackableType trackables = TrackableType.PlaneWithinPolygon
+            // Accept the plane's full tracked bounds/estimated extent, not just its (often still tiny,
+            // freshly-detected) boundary polygon — PlaneWithinPolygon alone routinely misses valid floor
+            // hits for the first several seconds of scanning, which reads to the user as "no floor found".
+            const TrackableType floorTrackables = TrackableType.PlaneWithinPolygon
                 | TrackableType.PlaneWithinBounds
                 | TrackableType.PlaneWithinInfinity
-                | TrackableType.PlaneEstimated
-                | TrackableType.FeaturePoint;
+                | TrackableType.PlaneEstimated;
 
-            if (!m_RaycastManager.Raycast(screenPoint, s_Hits, trackables))
-                return false;
-
-            float cameraY = m_MainCamera.transform.position.y;
-            int bestScore = 0;
-
-            for (int i = 0; i < s_Hits.Count; i++)
+            if (m_RaycastManager.Raycast(screenPoint, s_Hits, floorTrackables))
             {
-                var hit = s_Hits[i];
-                if (hit.distance > m_MaxDistance)
-                    continue;
+                ARRaycastHit bestHit = default;
+                bool foundFloor = false;
+                bool bestIsEstimated = true;
 
-                int score;
-                ARPlane candidatePlane = null;
-
-                if (hit.trackable is ARPlane p)
+                // Prefer hits against a real detected plane over "estimated" ones (derived from feature
+                // points, whose height can be off by several centimetres and read as floating furniture).
+                for (int i = 0; i < s_Hits.Count; i++)
                 {
-                    if (p.alignment != PlaneAlignment.HorizontalUp)
+                    var hit = s_Hits[i];
+                    if (hit.distance > m_MaxDistance)
                         continue;
 
-                    candidatePlane = p;
-                    score = hit.hitType == TrackableType.PlaneEstimated ? 2 : 3;
-                }
-                else if ((hit.hitType & TrackableType.FeaturePoint) != 0)
-                {
-                    if (Vector3.Dot(hit.pose.up, Vector3.up) < 0.75f)
-                        continue;
-                    if (hit.pose.position.y > cameraY - 0.4f)
+                    if (!(hit.trackable is ARPlane plane) || plane.alignment != PlaneAlignment.HorizontalUp)
                         continue;
 
-                    score = 1;
-                }
-                else
-                {
-                    continue;
+                    bool isEstimated = hit.hitType == TrackableType.PlaneEstimated;
+                    if (!foundFloor || (bestIsEstimated && !isEstimated))
+                    {
+                        bestHit = hit;
+                        bestIsEstimated = isEstimated;
+                        foundFloor = true;
+                        CurrentPlane = plane;
+                        if (!isEstimated)
+                            break;
+                    }
                 }
 
-                if (score > bestScore)
+                if (foundFloor)
                 {
-                    bestScore = score;
-                    pose = hit.pose;
-                    plane = candidatePlane;
-                    estimated = score < 3;
-                    if (score == 3)
-                        break;
+                    HasHit = true;
+
+                    // Compute yaw facing the user, snapped to item's snap increment
+                    FurnitureItem selectedItem = m_CatalogService != null ? m_CatalogService.SelectedItem : null;
+                    float snapDegrees = selectedItem != null ? selectedItem.SnapRotationDegrees : 45f;
+
+                    Vector3 camPos = m_MainCamera.transform.position;
+                    Vector3 lookDir = camPos - bestHit.pose.position;
+                    lookDir.y = 0f;
+
+                    Quaternion targetRot = Quaternion.identity;
+                    if (lookDir.sqrMagnitude > 0.001f)
+                    {
+                        float rawYaw = Quaternion.LookRotation(lookDir, Vector3.up).eulerAngles.y;
+                        float snappedYaw = Mathf.Round(rawYaw / snapDegrees) * snapDegrees;
+                        targetRot = Quaternion.Euler(0, snappedYaw, 0);
+                    }
+
+                    // Position hugs floor surface with slight 3mm offset to eliminate z-fighting
+                    Vector3 reticlePos = bestHit.pose.position + Vector3.up * 0.003f;
+                    transform.SetPositionAndRotation(reticlePos, targetRot);
+
+                    CurrentPose = new Pose(reticlePos, targetRot);
+
+                    // Update footprint rectangle & check validity
+                    UpdateFootprint(selectedItem);
+                    SetVisible(true);
+                    return;
                 }
             }
 
-            return bestScore > 0;
+            HasHit = false;
+            SetVisible(false);
         }
 
         void UpdateFootprint(FurnitureItem item)

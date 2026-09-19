@@ -90,9 +90,6 @@ namespace ARSpace.Editor.AssetBuilders
             }
 
             UiAssetBuilder.EnsureContactShadowMaterial();
-            Material reticleMat = UiAssetBuilder.EnsureReticleLineMaterial();
-            if (reticleMat != null)
-                outlineMat = reticleMat;
 
             GameObject reticleGo = BuildPlacementReticle(outlineMat);
             BuildSelectionVisual(outlineMat);

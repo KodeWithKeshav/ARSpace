@@ -138,7 +138,7 @@ namespace ARSpace.AR
                 }
 
                 // 2. Validate Reticle Hit
-                if (m_Reticle == null || !m_Reticle.HasHit)
+                if (m_Reticle == null || !m_Reticle.HasHit || m_Reticle.CurrentPlane == null)
                 {
                     GameEvents.RaiseToastRequested("Aim at a detected floor surface to place.");
                     Debug.LogWarning("[ARPlacementManager] Placement rejected: Reticle has no valid floor hit.");

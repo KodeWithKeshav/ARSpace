@@ -20,9 +20,6 @@ namespace ARSpace.UI
         [SerializeField] Button m_SecretToggle;
         [SerializeField] GameObject m_DebugHudRoot;
 
-        const float ScanTipDelaySeconds = 7f;
-        float m_ScanStartTime = -1f;
-
         string m_TrackingGuidance = string.Empty;
         string m_Current;
         float m_NextEvaluate;
@@ -96,29 +93,15 @@ namespace ARSpace.UI
             if (state == AppState.ObjectSelected)
                 return "Drag to move  ·  twist to rotate  ·  pinch to resize";
 
-            // Floors that are shiny, plain or repetitive can take ARCore a while: coach the user on what helps.
-            if (planes == 0 && placed == 0)
-            {
-                if (m_ScanStartTime < 0f) m_ScanStartTime = Time.unscaledTime;
-                if (Time.unscaledTime - m_ScanStartTime > ScanTipDelaySeconds)
-                    return "Still scanning — move the phone slowly side to side and keep the floor in view";
-            }
-            else
-            {
-                m_ScanStartTime = -1f;
-            }
-
             var catalog = ServiceLocator.Get<CatalogService>();
             FurnitureItem selected = catalog != null ? catalog.SelectedItem : null;
 
             if (selected != null && state == AppState.PlacementPending)
             {
                 var reticle = ServiceLocator.Get<PlacementReticle>();
-                if (reticle != null && reticle.HasHit)
-                    return reticle.IsEstimatedFloor
-                        ? $"Tap Place for the {selected.DisplayName} (estimated floor — keep scanning to refine)"
-                        : $"Tap Place to put the {selected.DisplayName} here";
-                return $"Aim at the floor to position the {selected.DisplayName}";
+                return reticle != null && reticle.HasHit
+                    ? $"Tap Place to put the {selected.DisplayName} here"
+                    : $"Aim at the floor to position the {selected.DisplayName}";
             }
 
             if (planes == 0 && placed == 0)
