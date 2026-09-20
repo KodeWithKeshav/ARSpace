@@ -80,6 +80,14 @@ namespace ARSpace.UI
             if (!string.IsNullOrEmpty(m_TrackingGuidance))
                 return m_TrackingGuidance;
 
+            if (ARSpace.AR.MeasureTool.IsActive)
+            {
+                int points = ServiceLocator.TryGet(out ARSpace.AR.MeasureTool measure) ? measure.PointCount : 0;
+                return points == 0 ? "Measure: tap the first point on the floor"
+                     : points == 1 ? "Now tap the second point"
+                     : "Tap again to start a new measurement";
+            }
+
             if (m_PlaneManager == null)
                 m_PlaneManager = FindFirstObjectByType<ARPlaneManager>();
 

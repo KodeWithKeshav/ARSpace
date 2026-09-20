@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem.EnhancedTouch;
 using Touch = UnityEngine.InputSystem.EnhancedTouch.Touch;
 using TouchPhase = UnityEngine.InputSystem.TouchPhase;
+using ARSpace.AR;
 using ARSpace.Core;
 
 namespace ARSpace.Placement
@@ -204,7 +205,12 @@ namespace ARSpace.Placement
                 {
                     float duration = Time.unscaledTime - m_TouchStartTime;
                     bool moved = Vector2.Distance(position, m_TouchStartPos) > m_DragThresholdPixels;
-                    if (duration <= m_MaxTapDuration && !moved && m_SelectionService != null)
+                    if (duration <= m_MaxTapDuration && !moved && MeasureTool.IsActive)
+                    {
+                        if (ServiceLocator.TryGet(out MeasureTool measure))
+                            measure.AddPoint(position);
+                    }
+                    else if (duration <= m_MaxTapDuration && !moved && m_SelectionService != null)
                     {
                         // A tap on furniture selects/deselects it; a tap on empty floor while positioning a
                         // catalogue item moves the placement marker there.

@@ -98,6 +98,7 @@ namespace ARSpace.Editor.AssetBuilders
             BuildSelectionVisual(outlineMat);
             BuildManagersHierarchy(reticleGo);
             BuildEventSystem();
+            s_LineMaterial = outlineMat;
             BuildCanvas();
 
             EditorSceneManager.MarkSceneDirty(scene);
@@ -251,6 +252,7 @@ namespace ARSpace.Editor.AssetBuilders
             root.AddComponent<PlacedObjectRegistry>();
             root.AddComponent<PlaneVisibilityController>();
             root.AddComponent<ManualFloor>();
+            root.AddComponent<UndoService>();
             root.AddComponent<ObjectSelectionService>();
             root.AddComponent<GestureRouter>();
             root.AddComponent<ObjectManipulator>();
@@ -286,6 +288,8 @@ namespace ARSpace.Editor.AssetBuilders
         const float FloatingGap = 18f;
         const float ActionBarHeight = 104f;
         const float SelectionCardHeight = 310f;
+        const float MoveCardHeight = 224f;
+        static Material s_LineMaterial;
         const float SideMargin = 32f;
 
         static Sprite s_Rounded;
@@ -320,6 +324,8 @@ namespace ARSpace.Editor.AssetBuilders
             BuildSelectionCard(safe);
             BuildPlacementBar(safe);
             BuildFloorAdjust(safe);
+            BuildMoveCard(safe);
+            BuildStatusRow(safe);
         }
 
         static void BuildTopHint(Transform parent)
@@ -356,7 +362,7 @@ namespace ARSpace.Editor.AssetBuilders
             hudRect.anchorMax = new Vector2(0.5f, 1f);
             hudRect.pivot = new Vector2(0.5f, 1f);
             hudRect.sizeDelta = new Vector2(900, 112);
-            hudRect.anchoredPosition = new Vector2(0, -120);
+            hudRect.anchoredPosition = new Vector2(0, -206);
             var hudImage = hudGo.GetComponent<Image>();
             UiStyle.Round(hudImage, s_Rounded, 26f);
             hudImage.color = new Color(0f, 0f, 0f, 0.6f);
@@ -382,7 +388,7 @@ namespace ARSpace.Editor.AssetBuilders
             rect.anchorMax = new Vector2(0.5f, 0f);
             rect.pivot = new Vector2(0.5f, 0f);
             rect.sizeDelta = new Vector2(900, 88);
-            rect.anchoredPosition = new Vector2(0, SheetHeight + FloatingGap + SelectionCardHeight + FloatingGap);
+            rect.anchoredPosition = new Vector2(0, SheetHeight + FloatingGap + SelectionCardHeight + FloatingGap + MoveCardHeight + FloatingGap);
 
             var image = go.GetComponent<Image>();
             UiStyle.Round(image, s_Rounded, 44f);
@@ -722,6 +728,160 @@ namespace ARSpace.Editor.AssetBuilders
             AssignSerializedField(controls, "m_LowerButton", lower);
             AssignSerializedField(controls, "m_RaiseButton", raise);
             AssignSerializedField(controls, "m_Status", status);
+        }
+
+        static void BuildMoveCard(Transform parent)
+        {
+            float bottom = SheetHeight + FloatingGap + SelectionCardHeight + FloatingGap;
+
+            // Script on an always-active holder; only the card is shown/hidden with the selection.
+            var holder = new GameObject("MoveControls", typeof(RectTransform), typeof(ObjectNudgeControls));
+            var holderRect = (RectTransform)holder.transform;
+            holderRect.SetParent(parent, false);
+            Stretch(holderRect, 0, 0);
+
+            var card = new GameObject("Card", typeof(RectTransform), typeof(Image));
+            var cardRect = (RectTransform)card.transform;
+            cardRect.SetParent(holderRect, false);
+            cardRect.anchorMin = new Vector2(0f, 0f);
+            cardRect.anchorMax = new Vector2(1f, 0f);
+            cardRect.pivot = new Vector2(0.5f, 0f);
+            cardRect.offsetMin = new Vector2(SideMargin, bottom);
+            cardRect.offsetMax = new Vector2(-SideMargin, bottom + MoveCardHeight);
+
+            var image = card.GetComponent<Image>();
+            UiStyle.Round(image, s_Rounded, 40f);
+            image.color = UiStyle.Panel;
+            AddShadow(card);
+
+            HoldButton left = null, right = null, away = null, closer = null, turnLeft = null, turnRight = null;
+            RectTransform rowA = CreateMoveRow(cardRect, "MoveRow", 118f, 202f);
+            left = CreateFlexibleHoldButton(rowA, "LeftButton", "Left");
+            right = CreateFlexibleHoldButton(rowA, "RightButton", "Right");
+            away = CreateFlexibleHoldButton(rowA, "AwayButton", "Away");
+            closer = CreateFlexibleHoldButton(rowA, "CloserButton", "Closer");
+
+            RectTransform rowB = CreateMoveRow(cardRect, "TurnRow", 22f, 106f);
+            turnLeft = CreateFlexibleHoldButton(rowB, "TurnLeftButton", "Turn left");
+            turnRight = CreateFlexibleHoldButton(rowB, "TurnRightButton", "Turn right");
+
+            var controls = holder.GetComponent<ObjectNudgeControls>();
+            AssignSerializedField(controls, "m_Card", card);
+            AssignSerializedField(controls, "m_LeftButton", left);
+            AssignSerializedField(controls, "m_RightButton", right);
+            AssignSerializedField(controls, "m_AwayButton", away);
+            AssignSerializedField(controls, "m_CloserButton", closer);
+            AssignSerializedField(controls, "m_TurnLeftButton", turnLeft);
+            AssignSerializedField(controls, "m_TurnRightButton", turnRight);
+        }
+
+        static RectTransform CreateMoveRow(RectTransform card, string name, float bottomOffset, float topOffset)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            var rect = (RectTransform)go.transform;
+            rect.SetParent(card, false);
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(1f, 0f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.offsetMin = new Vector2(24, bottomOffset);
+            rect.offsetMax = new Vector2(-24, topOffset);
+
+            var layout = go.GetComponent<HorizontalLayoutGroup>();
+            layout.spacing = 12;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = true;
+            return rect;
+        }
+
+        static HoldButton CreateFlexibleHoldButton(Transform parent, string name, string label)
+        {
+            HoldButton button = CreateHoldButton(parent, name, label);
+            var le = button.GetComponent<LayoutElement>();
+            le.preferredWidth = -1;
+            le.flexibleWidth = 1;
+            return button;
+        }
+
+        static void BuildStatusRow(Transform parent)
+        {
+            const float rowTop = 124f;
+            const float rowHeight = 72f;
+
+            var holder = new GameObject("StatusRow", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(StatusChips), typeof(MeasureTool));
+            var rect = (RectTransform)holder.transform;
+            rect.SetParent(parent, false);
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.offsetMin = new Vector2(SideMargin, -(rowTop + rowHeight));
+            rect.offsetMax = new Vector2(-SideMargin, -rowTop);
+
+            var layout = holder.GetComponent<HorizontalLayoutGroup>();
+            layout.spacing = 12;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = true;
+            layout.childAlignment = TextAnchor.MiddleLeft;
+
+            // Live layout summary
+            var stats = new GameObject("StatsChip", typeof(RectTransform), typeof(Image), typeof(CanvasGroup), typeof(LayoutElement));
+            var statsRect = (RectTransform)stats.transform;
+            statsRect.SetParent(rect, false);
+            var statsImage = stats.GetComponent<Image>();
+            UiStyle.Round(statsImage, s_Rounded, 36f);
+            statsImage.color = new Color(0.05f, 0.06f, 0.08f, 0.78f);
+            statsImage.raycastTarget = false;
+            stats.GetComponent<LayoutElement>().flexibleWidth = 1;
+            var statsGroup = stats.GetComponent<CanvasGroup>();
+            statsGroup.blocksRaycasts = false;
+            statsGroup.interactable = false;
+
+            TextMeshProUGUI statsText = CreateText(statsRect, "Text", 22, FontStyles.Bold, TextAlignmentOptions.Left, UiStyle.TextPrimary);
+            Stretch(statsText.rectTransform, 24, 4);
+            statsText.enableWordWrapping = false;
+            statsText.overflowMode = TextOverflowModes.Ellipsis;
+            statsText.raycastTarget = false;
+
+            Button measureBtn = CreateButton(rect, "MeasureButton", "Measure", UiStyle.Secondary, 36f, 24);
+            measureBtn.gameObject.AddComponent<LayoutElement>().preferredWidth = 200;
+            TextMeshProUGUI measureLabel = measureBtn.GetComponentInChildren<TextMeshProUGUI>();
+
+            Button undoBtn = CreateButton(rect, "UndoButton", "Undo", UiStyle.Secondary, 36f, 24);
+            undoBtn.gameObject.AddComponent<LayoutElement>().preferredWidth = 150;
+
+            var chips = holder.GetComponent<StatusChips>();
+            AssignSerializedField(chips, "m_StatsGroup", statsGroup);
+            AssignSerializedField(chips, "m_StatsText", statsText);
+            AssignSerializedField(chips, "m_MeasureButton", measureBtn);
+            AssignSerializedField(chips, "m_MeasureLabel", measureLabel);
+            AssignSerializedField(chips, "m_UndoButton", undoBtn);
+
+            // Floating distance label shown over the measured line
+            var label = new GameObject("MeasureLabel", typeof(RectTransform), typeof(Image));
+            var labelRect = (RectTransform)label.transform;
+            labelRect.SetParent(parent, false);
+            labelRect.anchorMin = new Vector2(0.5f, 0.5f);
+            labelRect.anchorMax = new Vector2(0.5f, 0.5f);
+            labelRect.pivot = new Vector2(0.5f, 0.5f);
+            labelRect.sizeDelta = new Vector2(440, 70);
+            var labelImage = label.GetComponent<Image>();
+            UiStyle.Round(labelImage, s_Rounded, 34f);
+            labelImage.color = new Color(0.05f, 0.06f, 0.08f, 0.88f);
+            labelImage.raycastTarget = false;
+
+            TextMeshProUGUI labelText = CreateText(labelRect, "Text", 30, FontStyles.Bold, TextAlignmentOptions.Center, new Color(0.55f, 0.9f, 1f, 1f));
+            Stretch(labelText.rectTransform, 16, 4);
+            labelText.raycastTarget = false;
+            label.SetActive(false);
+
+            var tool = holder.GetComponent<MeasureTool>();
+            AssignSerializedField(tool, "m_LineMaterial", s_LineMaterial);
+            AssignSerializedField(tool, "m_Label", labelText);
+            AssignSerializedField(tool, "m_LabelRoot", labelRect);
+            AssignSerializedField(tool, "m_LabelParent", (RectTransform)parent);
         }
 
         static HoldButton CreateHoldButton(Transform parent, string name, string label)
