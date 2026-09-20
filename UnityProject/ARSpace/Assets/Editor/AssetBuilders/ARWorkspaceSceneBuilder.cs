@@ -288,7 +288,7 @@ namespace ARSpace.Editor.AssetBuilders
         const float FloatingGap = 18f;
         const float ActionBarHeight = 104f;
         const float SelectionCardHeight = 310f;
-        const float MoveCardHeight = 224f;
+        const float MoveCardHeight = 324f;
         static Material s_LineMaterial;
         const float SideMargin = 32f;
 
@@ -755,15 +755,19 @@ namespace ARSpace.Editor.AssetBuilders
             AddShadow(card);
 
             HoldButton left = null, right = null, away = null, closer = null, turnLeft = null, turnRight = null;
-            RectTransform rowA = CreateMoveRow(cardRect, "MoveRow", 118f, 202f);
+            RectTransform rowA = CreateMoveRow(cardRect, "MoveRow", 218f, 302f);
             left = CreateFlexibleHoldButton(rowA, "LeftButton", "Left");
             right = CreateFlexibleHoldButton(rowA, "RightButton", "Right");
             away = CreateFlexibleHoldButton(rowA, "AwayButton", "Away");
             closer = CreateFlexibleHoldButton(rowA, "CloserButton", "Closer");
 
-            RectTransform rowB = CreateMoveRow(cardRect, "TurnRow", 22f, 106f);
+            RectTransform rowB = CreateMoveRow(cardRect, "TurnRow", 120f, 204f);
             turnLeft = CreateFlexibleHoldButton(rowB, "TurnLeftButton", "Turn left");
             turnRight = CreateFlexibleHoldButton(rowB, "TurnRightButton", "Turn right");
+
+            RectTransform rowC = CreateMoveRow(cardRect, "SizeRow", 22f, 106f);
+            HoldButton smaller = CreateFlexibleHoldButton(rowC, "SmallerButton", "Smaller");
+            HoldButton larger = CreateFlexibleHoldButton(rowC, "LargerButton", "Larger");
 
             var controls = holder.GetComponent<ObjectNudgeControls>();
             AssignSerializedField(controls, "m_Card", card);
@@ -773,6 +777,8 @@ namespace ARSpace.Editor.AssetBuilders
             AssignSerializedField(controls, "m_CloserButton", closer);
             AssignSerializedField(controls, "m_TurnLeftButton", turnLeft);
             AssignSerializedField(controls, "m_TurnRightButton", turnRight);
+            AssignSerializedField(controls, "m_SmallerButton", smaller);
+            AssignSerializedField(controls, "m_LargerButton", larger);
         }
 
         static RectTransform CreateMoveRow(RectTransform card, string name, float bottomOffset, float topOffset)
@@ -809,7 +815,7 @@ namespace ARSpace.Editor.AssetBuilders
             const float rowTop = 124f;
             const float rowHeight = 72f;
 
-            var holder = new GameObject("StatusRow", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(StatusChips), typeof(MeasureTool));
+            var holder = new GameObject("StatusRow", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(StatusChips), typeof(MeasureTool), typeof(AreaTool), typeof(ToolsTray), typeof(CompassTool));
             var rect = (RectTransform)holder.transform;
             rect.SetParent(parent, false);
             rect.anchorMin = new Vector2(0f, 1f);
@@ -845,9 +851,8 @@ namespace ARSpace.Editor.AssetBuilders
             statsText.overflowMode = TextOverflowModes.Ellipsis;
             statsText.raycastTarget = false;
 
-            Button measureBtn = CreateButton(rect, "MeasureButton", "Measure", UiStyle.Secondary, 36f, 24);
-            measureBtn.gameObject.AddComponent<LayoutElement>().preferredWidth = 200;
-            TextMeshProUGUI measureLabel = measureBtn.GetComponentInChildren<TextMeshProUGUI>();
+            Button toolsBtn = CreateButton(rect, "ToolsButton", "Tools", UiStyle.Secondary, 36f, 24);
+            toolsBtn.gameObject.AddComponent<LayoutElement>().preferredWidth = 170;
 
             Button undoBtn = CreateButton(rect, "UndoButton", "Undo", UiStyle.Secondary, 36f, 24);
             undoBtn.gameObject.AddComponent<LayoutElement>().preferredWidth = 150;
@@ -855,9 +860,9 @@ namespace ARSpace.Editor.AssetBuilders
             var chips = holder.GetComponent<StatusChips>();
             AssignSerializedField(chips, "m_StatsGroup", statsGroup);
             AssignSerializedField(chips, "m_StatsText", statsText);
-            AssignSerializedField(chips, "m_MeasureButton", measureBtn);
-            AssignSerializedField(chips, "m_MeasureLabel", measureLabel);
             AssignSerializedField(chips, "m_UndoButton", undoBtn);
+
+            BuildToolsTray(parent, holder, toolsBtn, rowTop + rowHeight + 10f);
 
             // Floating distance label shown over the measured line
             var label = new GameObject("MeasureLabel", typeof(RectTransform), typeof(Image));
@@ -882,6 +887,137 @@ namespace ARSpace.Editor.AssetBuilders
             AssignSerializedField(tool, "m_Label", labelText);
             AssignSerializedField(tool, "m_LabelRoot", labelRect);
             AssignSerializedField(tool, "m_LabelParent", (RectTransform)parent);
+        }
+
+        /// <summary>Tools drawer under the status row (Measure / Area / Compass / Snap), the area readout and the compass dial.</summary>
+        static void BuildToolsTray(Transform parent, GameObject holder, Button toggle, float top)
+        {
+            const float trayHeight = 68f;
+
+            var tray = new GameObject("ToolsTray", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            var trayRect = (RectTransform)tray.transform;
+            trayRect.SetParent(parent, false);
+            trayRect.anchorMin = new Vector2(0f, 1f);
+            trayRect.anchorMax = new Vector2(1f, 1f);
+            trayRect.pivot = new Vector2(0.5f, 1f);
+            trayRect.offsetMin = new Vector2(SideMargin, -(top + trayHeight));
+            trayRect.offsetMax = new Vector2(-SideMargin, -top);
+
+            var layout = tray.GetComponent<HorizontalLayoutGroup>();
+            layout.spacing = 10;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = true;
+
+            Button measure = CreateButton(trayRect, "MeasureButton", "Measure", UiStyle.Secondary, 34f, 22);
+            Button area = CreateButton(trayRect, "AreaButton", "Area", UiStyle.Secondary, 34f, 22);
+            Button compass = CreateButton(trayRect, "CompassButton", "Compass", UiStyle.Secondary, 34f, 22);
+            Button snap = CreateButton(trayRect, "SnapButton", "Snap: Off", UiStyle.Secondary, 34f, 22);
+            TextMeshProUGUI snapLabel = snap.GetComponentInChildren<TextMeshProUGUI>();
+
+            // Result line for the Area tool (sits just under the tray, only when it has text).
+            var readout = new GameObject("AreaReadout", typeof(RectTransform), typeof(Image));
+            var readoutRect = (RectTransform)readout.transform;
+            readoutRect.SetParent(trayRect, false);
+            var le = readout.AddComponent<LayoutElement>();
+            le.ignoreLayout = true;
+            readoutRect.anchorMin = new Vector2(0f, 0f);
+            readoutRect.anchorMax = new Vector2(1f, 0f);
+            readoutRect.pivot = new Vector2(0.5f, 1f);
+            readoutRect.offsetMin = new Vector2(0, -68);
+            readoutRect.offsetMax = new Vector2(0, -8);
+            var readoutImage = readout.GetComponent<Image>();
+            UiStyle.Round(readoutImage, s_Rounded, 30f);
+            readoutImage.color = new Color(0.05f, 0.06f, 0.08f, 0.88f);
+            readoutImage.raycastTarget = false;
+            TextMeshProUGUI readoutText = CreateText(readoutRect, "Text", 24, FontStyles.Bold, TextAlignmentOptions.Center, new Color(0.55f, 1f, 0.7f, 1f));
+            Stretch(readoutText.rectTransform, 16, 4);
+            readoutText.raycastTarget = false;
+            readoutText.enableWordWrapping = false;
+
+            // Compass dial (right edge, below the tray)
+            var panel = new GameObject("CompassPanel", typeof(RectTransform), typeof(Image));
+            var panelRect = (RectTransform)panel.transform;
+            panelRect.SetParent(parent, false);
+            panelRect.anchorMin = new Vector2(1f, 1f);
+            panelRect.anchorMax = new Vector2(1f, 1f);
+            panelRect.pivot = new Vector2(1f, 1f);
+            panelRect.sizeDelta = new Vector2(220, 250);
+            panelRect.anchoredPosition = new Vector2(-SideMargin, -(top + trayHeight + 84f));
+            var panelImage = panel.GetComponent<Image>();
+            UiStyle.Round(panelImage, s_Rounded, 40f);
+            panelImage.color = new Color(0.05f, 0.06f, 0.08f, 0.80f);
+            panelImage.raycastTarget = false;
+
+            var dial = new GameObject("Dial", typeof(RectTransform), typeof(Image));
+            var dialRect = (RectTransform)dial.transform;
+            dialRect.SetParent(panelRect, false);
+            dialRect.anchorMin = new Vector2(0.5f, 1f);
+            dialRect.anchorMax = new Vector2(0.5f, 1f);
+            dialRect.pivot = new Vector2(0.5f, 0.5f);
+            dialRect.sizeDelta = new Vector2(176, 176);
+            dialRect.anchoredPosition = new Vector2(0, -104);
+            var dialImage = dial.GetComponent<Image>();
+            UiStyle.Round(dialImage, s_Rounded, 88f);
+            dialImage.color = new Color(1f, 1f, 1f, 0.10f);
+            dialImage.raycastTarget = false;
+
+            AddDialLabel(dialRect, "N", new Vector2(0, 66), new Color(1f, 0.42f, 0.25f, 1f));
+            AddDialLabel(dialRect, "E", new Vector2(66, 0), UiStyle.TextPrimary);
+            AddDialLabel(dialRect, "S", new Vector2(0, -66), UiStyle.TextPrimary);
+            AddDialLabel(dialRect, "W", new Vector2(-66, 0), UiStyle.TextPrimary);
+
+            // Fixed pointer showing where you are facing
+            TextMeshProUGUI pointer = CreateText(panelRect, "Pointer", 34, FontStyles.Bold, TextAlignmentOptions.Center, UiStyle.Primary);
+            pointer.text = "▼";
+            pointer.rectTransform.anchorMin = new Vector2(0.5f, 1f);
+            pointer.rectTransform.anchorMax = new Vector2(0.5f, 1f);
+            pointer.rectTransform.pivot = new Vector2(0.5f, 1f);
+            pointer.rectTransform.sizeDelta = new Vector2(60, 40);
+            pointer.rectTransform.anchoredPosition = new Vector2(0, -2);
+            pointer.raycastTarget = false;
+
+            TextMeshProUGUI heading = CreateText(panelRect, "Heading", 22, FontStyles.Bold, TextAlignmentOptions.Center, UiStyle.TextPrimary);
+            heading.rectTransform.anchorMin = new Vector2(0f, 0f);
+            heading.rectTransform.anchorMax = new Vector2(1f, 0f);
+            heading.rectTransform.pivot = new Vector2(0.5f, 0f);
+            heading.rectTransform.sizeDelta = new Vector2(-12, 36);
+            heading.rectTransform.anchoredPosition = new Vector2(0, 8);
+            heading.enableWordWrapping = false;
+            heading.overflowMode = TextOverflowModes.Ellipsis;
+            heading.raycastTarget = false;
+            panel.SetActive(false);
+
+            var tools = holder.GetComponent<ToolsTray>();
+            AssignSerializedField(tools, "m_Tray", tray);
+            AssignSerializedField(tools, "m_ToggleButton", toggle);
+            AssignSerializedField(tools, "m_MeasureButton", measure);
+            AssignSerializedField(tools, "m_AreaButton", area);
+            AssignSerializedField(tools, "m_CompassButton", compass);
+            AssignSerializedField(tools, "m_SnapButton", snap);
+            AssignSerializedField(tools, "m_SnapLabel", snapLabel);
+
+            var areaTool = holder.GetComponent<AreaTool>();
+            AssignSerializedField(areaTool, "m_LineMaterial", s_LineMaterial);
+            AssignSerializedField(areaTool, "m_Readout", readoutText);
+
+            var compassTool = holder.GetComponent<CompassTool>();
+            AssignSerializedField(compassTool, "m_Panel", panel);
+            AssignSerializedField(compassTool, "m_Dial", dialRect);
+            AssignSerializedField(compassTool, "m_HeadingText", heading);
+        }
+
+        static void AddDialLabel(RectTransform dial, string text, Vector2 pos, Color color)
+        {
+            TextMeshProUGUI t = CreateText(dial, "Dir" + text, 30, FontStyles.Bold, TextAlignmentOptions.Center, color);
+            t.text = text;
+            t.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+            t.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            t.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            t.rectTransform.sizeDelta = new Vector2(44, 44);
+            t.rectTransform.anchoredPosition = pos;
+            t.raycastTarget = false;
         }
 
         static HoldButton CreateHoldButton(Transform parent, string name, string label)

@@ -23,7 +23,7 @@ namespace ARSpace.Placement
         [Header("Thresholds")]
         [Tooltip("Distance in pixels a finger must move before a tap becomes a drag.")]
         [SerializeField]
-        float m_DragThresholdPixels = 24f;
+        float m_DragThresholdPixels = 40f;
 
         [Tooltip("Maximum duration in seconds for a tap gesture.")]
         [SerializeField]
@@ -205,7 +205,12 @@ namespace ARSpace.Placement
                 {
                     float duration = Time.unscaledTime - m_TouchStartTime;
                     bool moved = Vector2.Distance(position, m_TouchStartPos) > m_DragThresholdPixels;
-                    if (duration <= m_MaxTapDuration && !moved && MeasureTool.IsActive)
+                    if (duration <= m_MaxTapDuration && !moved && AreaTool.IsActive)
+                    {
+                        if (ServiceLocator.TryGet(out AreaTool area))
+                            area.AddPoint(position);
+                    }
+                    else if (duration <= m_MaxTapDuration && !moved && MeasureTool.IsActive)
                     {
                         if (ServiceLocator.TryGet(out MeasureTool measure))
                             measure.AddPoint(position);

@@ -34,6 +34,8 @@ namespace ARSpace.Placement
         [SerializeField]
         LineRenderer m_FootprintRenderer;
 
+        LineRenderer m_DotRenderer;
+
         [Header("Colours")]
         [SerializeField]
         Color m_ValidColor = new Color(1.0f, 0.42f, 0.0f, 1f); // ARSpace orange
@@ -123,10 +125,39 @@ namespace ARSpace.Placement
             m_FootprintRenderer.loop = true;
             m_FootprintRenderer.useWorldSpace = false;
             m_FootprintRenderer.alignment = LineAlignment.TransformZ;
-            m_FootprintRenderer.startWidth = 0.016f;
-            m_FootprintRenderer.endWidth = 0.016f;
+            m_FootprintRenderer.startWidth = 0.022f;
+            m_FootprintRenderer.endWidth = 0.022f;
             m_FootprintRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             m_FootprintRenderer.receiveShadows = false;
+
+            // Small centre dot (the marker reads as: square outline, circle inside, dot in the middle).
+            var dotGo = new GameObject("ReticleDot");
+            dotGo.transform.SetParent(transform, false);
+            m_DotRenderer = dotGo.AddComponent<LineRenderer>();
+            m_DotRenderer.loop = true;
+            m_DotRenderer.useWorldSpace = false;
+            m_DotRenderer.alignment = LineAlignment.TransformZ;
+            m_DotRenderer.startWidth = 0.03f;
+            m_DotRenderer.endWidth = 0.03f;
+            m_DotRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            m_DotRenderer.receiveShadows = false;
+            m_DotRenderer.sharedMaterial = m_RingRenderer.sharedMaterial;
+            m_DotRenderer.positionCount = 12;
+            for (int i = 0; i < 12; i++)
+            {
+                float a = (i / 12f) * Mathf.PI * 2f;
+                m_DotRenderer.SetPosition(i, new Vector3(Mathf.Cos(a) * 0.02f, 0.003f, Mathf.Sin(a) * 0.02f));
+            }
+        }
+
+        void SetRingRadius(float radius)
+        {
+            for (int i = 0; i < 32; i++)
+            {
+                float angle = (i / 32f) * Mathf.PI * 2f;
+                m_RingPoints[i] = new Vector3(Mathf.Cos(angle) * radius, 0.003f, Mathf.Sin(angle) * radius);
+            }
+            m_RingRenderer.SetPositions(m_RingPoints);
         }
 
         void Update()
@@ -161,6 +192,11 @@ namespace ARSpace.Placement
             else if (m_IsPinned)
             {
                 // The user tapped a spot: keep the marker exactly there, world-locked, regardless of where the phone points.
+                // Glide toward the requested spot: finger tremor while dragging is smoothed away, and the marker
+                // can never jump across the room in a single frame.
+                Vector3 smoothed = Vector3.Lerp(m_PinnedPose.position, m_PinTarget, 1f - Mathf.Exp(-Time.unscaledDeltaTime * 14f));
+                m_PinnedPose = new Pose(smoothed, m_PinnedPose.rotation);
+
                 floorPose = m_PinnedPose;
                 floorPlane = m_PinnedPlane;
                 found = true;
@@ -222,6 +258,7 @@ namespace ARSpace.Placement
         const float MaxPlacementDistance = 5f;
 
         bool m_IsPinned;
+        Vector3 m_PinTarget;
         Pose m_PinnedPose;
         ARPlane m_PinnedPlane;
         float m_LastFailToastTime = -10f;
@@ -255,8 +292,13 @@ namespace ARSpace.Placement
                 return false;
             }
 
-            m_PinnedPose = new Pose(hitPose.position, FacingYaw(hitPose.position));
+            Vector3 target = PlacementSnap.Apply(hitPose.position);
+            m_PinTarget = target;
             m_PinnedPlane = plane;
+
+            if (!m_IsPinned)
+                m_PinnedPose = new Pose(target, FacingYaw(target));
+
             m_IsPinned = true;
             return true;
         }
@@ -310,8 +352,19 @@ namespace ARSpace.Placement
             pose = default;
             plane = null;
 
-            // Preferred: the virtual floor — works with no ARCore plane detection at all.
-            if (ServiceLocator.TryGet(out ManualFloor manualFloor) && manualFloor.HasFloor)
+            bool hasManual = ServiceLocator.TryGet(out ManualFloor manualFloor) && manualFloor.HasFloor;
+
+            // Best: a floor patch ARCore has really detected under the tap — exact depth, so the result is rock steady.
+            if (hasManual && m_RaycastManager != null && TryRaycastDetectedPlane(screenPoint, out Pose planePose, out ARPlane planeHit))
+            {
+                manualFloor.NoteFloorHeight(planePose.position.y);
+                pose = planePose;
+                plane = planeHit;
+                return true;
+            }
+
+            // Otherwise the virtual floor — works with no plane detection at all.
+            if (hasManual)
             {
                 if (!manualFloor.GetPoint(screenPoint, out Vector3 floorPoint))
                     return false;
@@ -356,6 +409,32 @@ namespace ARSpace.Placement
             return found;
         }
 
+        bool TryRaycastDetectedPlane(Vector2 screenPoint, out Pose pose, out ARPlane plane)
+        {
+            pose = default;
+            plane = null;
+
+            const TrackableType trackables = TrackableType.PlaneWithinPolygon | TrackableType.PlaneWithinBounds;
+            if (!m_RaycastManager.Raycast(screenPoint, s_Hits, trackables))
+                return false;
+
+            for (int i = 0; i < s_Hits.Count; i++)
+            {
+                var hit = s_Hits[i];
+                if (hit.distance > MaxPlacementDistance)
+                    continue;
+
+                if (hit.trackable is ARPlane p && p.alignment == PlaneAlignment.HorizontalUp)
+                {
+                    pose = hit.pose;
+                    plane = p;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         void UpdateFootprint(FurnitureItem item)
         {
             Vector2 footprint = item != null ? item.Footprint : new Vector2(0.6f, 0.6f);
@@ -370,6 +449,9 @@ namespace ARSpace.Placement
 
             m_FootprintRenderer.positionCount = 5;
             m_FootprintRenderer.SetPositions(m_FootprintPoints);
+
+            // Inner circle scales with the footprint so it always sits neatly inside the outline.
+            SetRingRadius(Mathf.Clamp(Mathf.Min(footprint.x, footprint.y) * 0.32f, 0.08f, 0.45f));
 
             // Validate collision and boundary containment
             bool isOverlap = CheckObstacleOverlap(hx, hz);
@@ -472,6 +554,11 @@ namespace ARSpace.Placement
                 m_FootprintRenderer.startColor = col;
                 m_FootprintRenderer.endColor = col;
             }
+            if (m_DotRenderer != null)
+            {
+                m_DotRenderer.startColor = col;
+                m_DotRenderer.endColor = col;
+            }
         }
 
         void SetVisible(bool visible)
@@ -480,6 +567,8 @@ namespace ARSpace.Placement
                 m_RingRenderer.enabled = visible;
             if (m_FootprintRenderer != null && m_FootprintRenderer.enabled != visible)
                 m_FootprintRenderer.enabled = visible;
+            if (m_DotRenderer != null && m_DotRenderer.enabled != visible)
+                m_DotRenderer.enabled = visible;
         }
 
         /// <summary>

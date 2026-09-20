@@ -17,8 +17,8 @@ namespace ARSpace.UI
         [SerializeField] HoldButton m_RaiseButton;
         [SerializeField] TextMeshProUGUI m_Status;
 
-        const float TapStep = 0.01f;       // metres per tap
-        const float HoldSpeed = 0.10f;     // metres per second while held
+        const float TapStep = 0.005f;      // metres per tap
+        const float HoldSpeed = 0.03f;     // metres per second while held
 
         bool m_ObjectSelected;
         ManualFloor m_Floor;

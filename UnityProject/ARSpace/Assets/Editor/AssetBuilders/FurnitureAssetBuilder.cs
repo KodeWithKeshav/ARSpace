@@ -230,7 +230,7 @@ namespace ARSpace.Editor.AssetBuilders
             GameObject modelInstance = (GameObject)UnityEngine.Object.Instantiate(modelAsset, root.transform);
             modelInstance.name = "Model";
             modelInstance.transform.localPosition = Vector3.zero;
-            modelInstance.transform.localRotation = Quaternion.identity;
+            modelInstance.transform.localRotation = Quaternion.Euler(0f, FrontYawCorrection(modelName), 0f);
             modelInstance.transform.localScale = Vector3.one;
 
             Bounds raw = CalculateBounds(modelInstance);
@@ -285,6 +285,28 @@ namespace ARSpace.Editor.AssetBuilders
             UnityEngine.Object.DestroyImmediate(root);
 
             return savedPrefab;
+        }
+
+        /// <summary>
+        /// A few source models were authored facing a different way than the rest of the catalogue. Every model must
+        /// face +Z (the direction the placement marker and the Turn buttons treat as "front"), so these are turned
+        /// once, here, when the prefab is built.
+        /// </summary>
+        static float FrontYawCorrection(string modelName)
+        {
+            switch (modelName.ToLowerInvariant())
+            {
+                case "office_chair_5":
+                case "sofa_3":
+                case "recep_1":
+                case "recep_2":
+                    return -90f;
+                case "white_board_1":
+                case "white_board_2":
+                    return 90f;
+                default:
+                    return 0f;
+            }
         }
 
         static Sprite GenerateThumbnail(GameObject prefab, string targetPath)

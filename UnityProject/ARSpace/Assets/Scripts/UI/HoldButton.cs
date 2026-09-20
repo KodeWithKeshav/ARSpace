@@ -32,6 +32,22 @@ namespace ARSpace.UI
 
         void OnDisable() => Release();
 
+        void Update()
+        {
+            if (!IsHeld)
+                return;
+
+            // Failsafe: if the "finger up" event was ever missed, release as soon as nothing is touching the screen.
+            // (A stuck button would keep raising/lowering/moving whatever it controls, seen as things floating away.)
+            bool touching = UnityEngine.InputSystem.EnhancedTouch.EnhancedTouchSupport.enabled
+                            && UnityEngine.InputSystem.EnhancedTouch.Touch.activeTouches.Count > 0;
+            var mouse = UnityEngine.InputSystem.Mouse.current;
+            bool mouseDown = mouse != null && mouse.leftButton.isPressed;
+
+            if (!touching && !mouseDown)
+                Release();
+        }
+
         void Release()
         {
             IsHeld = false;

@@ -3,18 +3,21 @@ using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 using ARSpace.Core;
+using ARSpace.Placement;
 
 namespace ARSpace.AR
 {
     /// <summary>
-    /// A virtual, perfectly flat floor at a known height, so furniture can be positioned by simply tapping or
-    /// dragging on the screen — no ARCore plane detection required (that detection is slow or fails on shiny,
-    /// plain or patterned floors). ARCore still provides the phone's position, so anything placed on this floor
-    /// stays fixed in the room as you walk around.
+    /// A flat virtual floor at a known height, so furniture can be positioned by tapping or dragging on the
+    /// screen. Its height matters: a point picked on the floor is only stable when the floor height is right.
     ///
-    /// The floor height starts as "phone height minus a typical hold height" and is refined automatically
-    /// whenever ARCore does find a floor plane (or a solid floor point under a tap), and can be fine-tuned by
-    /// hand with <see cref="Adjust"/>.
+    /// Height sources, best first:
+    ///  1. ARCore's detected floor plane (used automatically whenever one is available),
+    ///  2. a solid ARCore surface point under a tap,
+    ///  3. an estimate (phone height minus a typical hold height),
+    /// with <see cref="Adjust"/> for small manual corrections. Manual corrections are limited to ±0.5 m of the
+    /// automatic value so the floor can never be pushed to a nonsensical height, and automatic updates stop once
+    /// furniture has been placed so placed objects never shift.
     /// </summary>
     public class ManualFloor : MonoBehaviour
     {
@@ -24,21 +27,25 @@ namespace ARSpace.AR
         [SerializeField] float m_AssumedCameraHeight = 1.35f;
 
         [Tooltip("Farthest floor distance that can be targeted, in metres.")]
-        [SerializeField] float m_MaxRayDistance = 5f;
-
-        [Tooltip("Off by default: the floor height is set only by the phone-height estimate and the Raise/Lower floor buttons. Turn on to let ARCore's own floor detection adjust it when available.")]
-        [SerializeField] bool m_UseARCoreFloor = false;
+        [SerializeField] float m_MaxRayDistance = 4f;
 
         [Tooltip("Minimum area (m²) for a detected ARCore plane to be trusted as the floor.")]
-        [SerializeField] float m_MinPlaneArea = 0.4f;
+        [SerializeField] float m_MinPlaneArea = 0.5f;
 
-        /// <summary>True once the floor height has been initialised (after AR tracking starts).</summary>
+        const float MinFloorBelowPhone = 0.7f;
+        const float MaxFloorBelowPhone = 2.4f;
+        const float MaxManualOffset = 0.5f;
+
+        /// <summary>True once the floor height has been initialised.</summary>
         public bool HasFloor { get; private set; }
 
         /// <summary>World-space height of the floor.</summary>
         public float FloorY { get; private set; }
 
         public FloorSource Source { get; private set; } = FloorSource.Assumed;
+
+        /// <summary>True when the height comes from ARCore or a manual correction rather than a guess.</summary>
+        public bool IsReliable => Source != FloorSource.Assumed;
 
         /// <summary>Distance from the phone down to the floor, or 0 when unknown.</summary>
         public float CameraHeightAboveFloor => HasFloor && m_Camera != null ? m_Camera.transform.position.y - FloorY : 0f;
@@ -48,11 +55,15 @@ namespace ARSpace.AR
         ARRaycastManager m_RaycastManager;
         float m_NextPlaneCheck;
         bool m_RebasedOnTracking;
+        float m_BaselineY;
 
         static readonly List<ARRaycastHit> s_Hits = new List<ARRaycastHit>();
 
         void Awake() => ServiceLocator.Register(this);
         void OnDestroy() => ServiceLocator.Unregister<ManualFloor>();
+
+        /// <summary>Automatic height updates stop once furniture is placed, so nothing already placed can shift.</summary>
+        static bool FurniturePlaced => ServiceLocator.TryGet(out PlacedObjectRegistry registry) && registry.Count > 0;
 
         void Update()
         {
@@ -63,8 +74,7 @@ namespace ARSpace.AR
 
             if (!HasFloor)
             {
-                FloorY = m_Camera.transform.position.y - m_AssumedCameraHeight;
-                Source = FloorSource.Assumed;
+                SetEstimate();
                 HasFloor = true;
             }
 
@@ -72,53 +82,96 @@ namespace ARSpace.AR
             if (!m_RebasedOnTracking && ARSession.state == ARSessionState.SessionTracking)
             {
                 m_RebasedOnTracking = true;
-                if (Source == FloorSource.Assumed)
-                    FloorY = m_Camera.transform.position.y - m_AssumedCameraHeight;
+                if (Source == FloorSource.Assumed && !FurniturePlaced)
+                    SetEstimate();
             }
 
-            if (m_UseARCoreFloor && Source != FloorSource.Manual && Time.unscaledTime >= m_NextPlaneCheck)
+            if (Source != FloorSource.Manual && !FurniturePlaced && Time.unscaledTime >= m_NextPlaneCheck)
             {
                 m_NextPlaneCheck = Time.unscaledTime + 0.5f;
-                UseLargestDetectedFloorPlane();
+                UseDetectedFloorPlane();
             }
         }
 
-        void UseLargestDetectedFloorPlane()
+        void SetEstimate()
+        {
+            FloorY = m_Camera.transform.position.y - m_AssumedCameraHeight;
+            m_BaselineY = FloorY;
+            Source = FloorSource.Assumed;
+        }
+
+        bool PlausibleFloor(float y)
+        {
+            if (m_Camera == null)
+                return false;
+
+            float below = m_Camera.transform.position.y - y;
+            return below >= MinFloorBelowPhone && below <= MaxFloorBelowPhone;
+        }
+
+        /// <summary>Uses the lowest sizeable horizontal plane ARCore has found — the floor is the lowest surface.</summary>
+        void UseDetectedFloorPlane()
         {
             if (m_PlaneManager == null)
                 m_PlaneManager = FindFirstObjectByType<ARPlaneManager>();
             if (m_PlaneManager == null)
                 return;
 
-            ARPlane best = null;
-            float bestArea = m_MinPlaneArea;
+            bool found = false;
+            float lowest = float.MaxValue;
             foreach (var plane in m_PlaneManager.trackables)
             {
                 if (plane == null || plane.alignment != PlaneAlignment.HorizontalUp)
                     continue;
+                if (plane.size.x * plane.size.y < m_MinPlaneArea)
+                    continue;
 
-                float area = plane.size.x * plane.size.y;
-                if (area > bestArea)
+                float y = plane.transform.position.y;
+                if (!PlausibleFloor(y))
+                    continue;
+
+                if (y < lowest)
                 {
-                    bestArea = area;
-                    best = plane;
+                    lowest = y;
+                    found = true;
                 }
             }
 
-            if (best != null)
-            {
-                FloorY = best.transform.position.y;
-                Source = FloorSource.ARCore;
-            }
+            if (found)
+                ApplyDetected(lowest);
         }
 
-        /// <summary>Raises or lowers the floor by hand. Manual adjustments are never overridden by auto-detection.</summary>
-        public void Adjust(float deltaMetres)
+        void ApplyDetected(float y)
         {
-            if (!HasFloor)
+            // First detection snaps; later refinements glide (5 cm at a time) so nothing visibly jumps.
+            FloorY = Source == FloorSource.Assumed ? y : Mathf.MoveTowards(FloorY, y, 0.05f);
+            m_BaselineY = FloorY;
+            Source = FloorSource.ARCore;
+        }
+
+        /// <summary>Called with a floor height measured by ARCore at a tapped point.</summary>
+        public void NoteFloorHeight(float y)
+        {
+            if (!HasFloor || Source == FloorSource.Manual || FurniturePlaced || !PlausibleFloor(y))
                 return;
 
-            FloorY += deltaMetres;
+            if (Mathf.Abs(y - FloorY) > 0.6f)
+                return;
+
+            ApplyDetected(y);
+        }
+
+        /// <summary>Nudges the floor by hand. Limited to ±0.5 m of the automatic height so it cannot run away.</summary>
+        public void Adjust(float deltaMetres)
+        {
+            if (!HasFloor || m_Camera == null)
+                return;
+
+            float y = FloorY + deltaMetres;
+            y = Mathf.Clamp(y, m_BaselineY - MaxManualOffset, m_BaselineY + MaxManualOffset);
+            y = Mathf.Clamp(y, m_Camera.transform.position.y - MaxFloorBelowPhone, m_Camera.transform.position.y - MinFloorBelowPhone);
+
+            FloorY = y;
             Source = FloorSource.Manual;
         }
 
@@ -128,8 +181,7 @@ namespace ARSpace.AR
             if (m_Camera == null)
                 return;
 
-            FloorY = m_Camera.transform.position.y - m_AssumedCameraHeight;
-            Source = FloorSource.Assumed;
+            SetEstimate();
             HasFloor = true;
             m_NextPlaneCheck = 0f;
         }
@@ -189,7 +241,7 @@ namespace ARSpace.AR
         /// </summary>
         public void RefineFromScreenPoint(Vector2 screenPoint)
         {
-            if (!m_UseARCoreFloor || !HasFloor || Source == FloorSource.Manual)
+            if (!HasFloor || Source == FloorSource.Manual || FurniturePlaced)
                 return;
 
             if (m_RaycastManager == null)
@@ -205,13 +257,12 @@ namespace ARSpace.AR
             {
                 var hit = s_Hits[i];
                 float y = hit.pose.position.y;
-                if (Mathf.Abs(y - FloorY) > 0.6f)
+                if (Mathf.Abs(y - FloorY) > 0.6f || !PlausibleFloor(y))
                     continue;
 
                 if (hit.trackable is ARPlane plane && plane.alignment == PlaneAlignment.HorizontalUp)
                 {
-                    FloorY = y;
-                    Source = FloorSource.ARCore;
+                    ApplyDetected(y);
                     return;
                 }
 

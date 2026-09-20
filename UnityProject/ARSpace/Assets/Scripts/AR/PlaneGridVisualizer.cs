@@ -135,12 +135,15 @@ namespace ARSpace.AR
                 {
                     m_MeshRenderer.enabled = isVisible;
                 }
-                if (m_LineRenderer != null && m_LineRenderer.enabled != isVisible)
+                if (ShowOutline && m_LineRenderer != null && m_LineRenderer.enabled != isVisible)
                 {
                     m_LineRenderer.enabled = isVisible;
                 }
             }
         }
+
+        // The dark boundary polygon looked like a stray black structure on the floor, so it is never shown.
+        const bool ShowOutline = false;
 
         void SetupLineRenderer()
         {
@@ -149,6 +152,7 @@ namespace ARSpace.AR
                 m_LineRenderer = gameObject.AddComponent<LineRenderer>();
             }
 
+            m_LineRenderer.enabled = ShowOutline;
             m_LineRenderer.loop = true;
             m_LineRenderer.useWorldSpace = false;
             m_LineRenderer.alignment = LineAlignment.View;
@@ -301,7 +305,7 @@ namespace ARSpace.AR
             if (shouldBeVisible)
             {
                 m_MeshRenderer.enabled = true;
-                if (m_LineRenderer != null)
+                if (ShowOutline && m_LineRenderer != null)
                     m_LineRenderer.enabled = true;
             }
         }
