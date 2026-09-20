@@ -48,7 +48,9 @@ namespace ARSpace.AR
             AppState state = app != null ? app.CurrentState : AppState.Scanning;
             bool scanning = state == AppState.Initializing || state == AppState.Scanning || state == AppState.PlacementPending;
 
-            bool visible = scanning && placed == 0;
+            // Show the grid while scanning or positioning furniture.
+            // Hide it only after objects are placed AND the user is no longer actively placing.
+            bool visible = scanning || placed == 0;
 
             if (visible == m_LastVisible)
                 return;

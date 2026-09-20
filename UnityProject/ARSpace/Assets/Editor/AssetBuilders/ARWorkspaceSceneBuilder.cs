@@ -256,6 +256,9 @@ namespace ARSpace.Editor.AssetBuilders
             root.AddComponent<ObjectSelectionService>();
             root.AddComponent<GestureRouter>();
             root.AddComponent<ObjectManipulator>();
+            root.AddComponent<RotationGizmo>();
+            root.AddComponent<PlacementPreview>();
+            root.AddComponent<SnapToObjectEdge>();
 
             var placementMgr = root.AddComponent<ARPlacementManager>();
             var reticleComponent = reticleGo.GetComponent<PlacementReticle>();

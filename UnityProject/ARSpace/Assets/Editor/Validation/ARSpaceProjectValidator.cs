@@ -265,6 +265,21 @@ namespace ARSpace.Editor.Validation
             Check("ObjectManipulator.cs exists", manipulatorExists,
                 "Missing Assets/Scripts/Placement/ObjectManipulator.cs");
 
+            bool rotationGizmoExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/Placement/RotationGizmo.cs") != null;
+            Check("RotationGizmo.cs exists", rotationGizmoExists,
+                "Missing Assets/Scripts/Placement/RotationGizmo.cs");
+
+            bool placementPreviewExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/Placement/PlacementPreview.cs") != null;
+            Check("PlacementPreview.cs exists", placementPreviewExists,
+                "Missing Assets/Scripts/Placement/PlacementPreview.cs");
+
+            bool snapToEdgeExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
+                "Assets/Scripts/Placement/SnapToObjectEdge.cs") != null;
+            Check("SnapToObjectEdge.cs exists", snapToEdgeExists,
+                "Missing Assets/Scripts/Placement/SnapToObjectEdge.cs");
+
             bool selectionToolbarExists = AssetDatabase.LoadAssetAtPath<MonoScript>(
                 "Assets/Scripts/UI/SelectionToolbar.cs") != null;
             Check("SelectionToolbar.cs exists", selectionToolbarExists,

@@ -32,7 +32,7 @@ namespace ARSpace.Placement
         ObjectSelectionService m_SelectionService;
         ObjectManipulator m_Manipulator;
 
-        enum GestureMode { None, TapPending, Dragging, MarkerDrag, MultiGesture }
+        enum GestureMode { None, TapPending, Dragging, MarkerDrag, MultiGesture, GizmoRotating }
         GestureMode m_CurrentMode = GestureMode.None;
 
         Vector2 m_TouchStartPos;
@@ -42,6 +42,7 @@ namespace ARSpace.Placement
 
         float m_InitialPinchDistance;
         float m_InitialAngle;
+        int m_GizmoHitHandle = -1;
 
         void Awake()
         {
@@ -92,9 +93,23 @@ namespace ARSpace.Placement
             m_TouchStartTime = Time.unscaledTime;
             m_TouchStartedOverUI = UiPointer.IsOverUI(position);
             m_TouchStartedOnSelected = false;
+            m_GizmoHitHandle = -1;
 
             if (m_TouchStartedOverUI)
                 return;
+
+            // Priority: Rotation gizmo handles > Object body > Floor
+            var gizmo = ServiceLocator.Get<RotationGizmo>();
+            if (gizmo != null && gizmo.IsActive)
+            {
+                int handle = gizmo.HitTestHandles(position);
+                if (handle >= 0)
+                {
+                    m_GizmoHitHandle = handle;
+                    m_CurrentMode = GestureMode.TapPending;
+                    return;
+                }
+            }
 
             m_CurrentMode = GestureMode.TapPending;
             if (m_SelectionService != null && m_SelectionService.HasSelection)
@@ -169,6 +184,24 @@ namespace ARSpace.Placement
             if (m_TouchStartedOverUI)
                 return;
 
+            // Handle gizmo rotation drag
+            if (m_CurrentMode == GestureMode.TapPending && m_GizmoHitHandle >= 0 &&
+                Vector2.Distance(position, m_TouchStartPos) > m_DragThresholdPixels * 0.5f)
+            {
+                m_CurrentMode = GestureMode.GizmoRotating;
+                var gizmo = ServiceLocator.Get<RotationGizmo>();
+                if (gizmo != null)
+                    gizmo.BeginDrag(m_GizmoHitHandle, m_TouchStartPos);
+            }
+
+            if (m_CurrentMode == GestureMode.GizmoRotating)
+            {
+                var gizmo = ServiceLocator.Get<RotationGizmo>();
+                if (gizmo != null)
+                    gizmo.OnDrag(position);
+                return;
+            }
+
             if (m_CurrentMode == GestureMode.TapPending && m_TouchStartedOnSelected &&
                 Vector2.Distance(position, m_TouchStartPos) > m_DragThresholdPixels &&
                 m_SelectionService != null && m_SelectionService.HasSelection && m_Manipulator != null)
@@ -205,7 +238,11 @@ namespace ARSpace.Placement
                 {
                     float duration = Time.unscaledTime - m_TouchStartTime;
                     bool moved = Vector2.Distance(position, m_TouchStartPos) > m_DragThresholdPixels;
-                    if (duration <= m_MaxTapDuration && !moved && MeasureTool.IsActive)
+                    if (m_GizmoHitHandle >= 0)
+                    {
+                        // User tapped on a rotation gizmo handle; ignore tap so it doesn't deselect or retarget floor
+                    }
+                    else if (duration <= m_MaxTapDuration && !moved && MeasureTool.IsActive)
                     {
                         if (ServiceLocator.TryGet(out MeasureTool measure))
                             measure.AddPoint(position);
@@ -225,6 +262,12 @@ namespace ARSpace.Placement
                 else if (m_CurrentMode == GestureMode.Dragging && m_Manipulator != null)
                 {
                     m_Manipulator.EndDrag();
+                }
+                else if (m_CurrentMode == GestureMode.GizmoRotating)
+                {
+                    var gizmo = ServiceLocator.Get<RotationGizmo>();
+                    if (gizmo != null)
+                        gizmo.EndDrag();
                 }
             }
 

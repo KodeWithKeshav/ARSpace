@@ -107,6 +107,7 @@ namespace ARSpace.UI
                 obj.transform.Rotate(0f, turn * TapTurnDegrees, 0f, Space.World);
 
             m_Adjusting = true;
+            obj.BeginManipulation();
         }
 
         void Update()
@@ -158,7 +159,11 @@ namespace ARSpace.UI
             if (m_Anchors == null)
                 m_Anchors = ServiceLocator.Get<AnchorService>();
             if (m_Anchors != null && obj != null)
+            {
                 await m_Anchors.AttachToAnchorAsync(obj, new Pose(obj.transform.position, obj.transform.rotation), null);
+                if (obj != null)
+                    obj.EndManipulation();
+            }
         }
     }
 }

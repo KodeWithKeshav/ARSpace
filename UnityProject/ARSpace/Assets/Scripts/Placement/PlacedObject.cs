@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using ARSpace.Core;
 using ARSpace.Furniture;
 
 namespace ARSpace.Placement
@@ -32,6 +33,30 @@ namespace ARSpace.Placement
 
         MaterialPropertyBlock m_PropertyBlock;
         static readonly int s_BaseColorId = Shader.PropertyToID("_BaseColor");
+
+        // ── Drift rejection ─────────────────────────────────────
+        // ARCore anchor corrections can jitter ±1–3 cm frame-to-frame on noisy floors.
+        // We store the "intended" world pose and smooth small corrections so the object
+        // appears rock-solid, while still allowing large relocalisations through.
+
+        [Header("Stability")]
+        [Tooltip("Maximum per-frame correction (metres) that counts as jitter and gets smoothed.")]
+        [SerializeField]
+        float m_DriftThreshold = 0.025f;
+
+        [Tooltip("Smoothing factor for jitter rejection (lower = smoother but laggier).")]
+        [SerializeField, Range(0.02f, 1f)]
+        float m_SmoothFactor = 0.08f;
+
+        /// <summary>The world pose we intend the object to be at. Set by placement / drag-end / nudge.</summary>
+        Vector3 m_IntendedPosition;
+        Quaternion m_IntendedRotation;
+        bool m_IntendedPoseSet;
+
+        /// <summary>True while the user is actively manipulating (dragging / rotating / height adjust).
+        /// Drift rejection is paused so the user's input is applied immediately.</summary>
+        bool m_IsBeingManipulated;
+        public bool IsBeingManipulated => m_IsBeingManipulated;
 
         public string InstanceId => m_InstanceId;
         public FurnitureItem Item => m_FurnitureItem;
@@ -85,6 +110,62 @@ namespace ARSpace.Placement
 
             if (GetComponent<ContactShadow>() == null)
                 gameObject.AddComponent<ContactShadow>();
+        }
+
+        // ── Drift rejection in LateUpdate ────────────────────
+
+        void LateUpdate()
+        {
+            if (!m_IntendedPoseSet || m_IsBeingManipulated)
+                return;
+
+            // After the anchor system has moved us, compare to where we should be.
+            Vector3 currentPos = transform.position;
+            float drift = Vector3.Distance(currentPos, m_IntendedPosition);
+
+            if (drift > 0.0001f && drift < m_DriftThreshold)
+            {
+                // Small correction = jitter. Smooth it out.
+                transform.position = Vector3.Lerp(currentPos, m_IntendedPosition, 1f - m_SmoothFactor);
+            }
+            else if (drift >= m_DriftThreshold)
+            {
+                // Large correction = genuine relocalisation. Accept and update intended.
+                m_IntendedPosition = currentPos;
+            }
+
+            // Lock Y to floor height to prevent vertical floating.
+            if (!float.IsNaN(FloorWorldY))
+            {
+                Vector3 pos = transform.position;
+                float desiredY = FloorWorldY + (m_IntendedPosition.y - FloorWorldY);
+                if (Mathf.Abs(pos.y - desiredY) > 0.0005f && Mathf.Abs(pos.y - desiredY) < 0.1f)
+                {
+                    pos.y = Mathf.Lerp(pos.y, desiredY, 0.2f);
+                    transform.position = pos;
+                }
+            }
+        }
+
+        /// <summary>Call after placing, re-anchoring, or finishing a manipulation to record the intended pose.</summary>
+        public void SetIntendedPose()
+        {
+            m_IntendedPosition = transform.position;
+            m_IntendedRotation = transform.rotation;
+            m_IntendedPoseSet = true;
+        }
+
+        /// <summary>Call when starting a drag/rotate/height-adjust gesture so drift rejection is paused.</summary>
+        public void BeginManipulation()
+        {
+            m_IsBeingManipulated = true;
+        }
+
+        /// <summary>Call when ending a manipulation gesture. Records the new intended pose and re-enables drift rejection.</summary>
+        public void EndManipulation()
+        {
+            m_IsBeingManipulated = false;
+            SetIntendedPose();
         }
 
         /// <summary>World height of the floor this object was placed on (NaN if unknown). Used to reset height and draw its floor shadow.</summary>

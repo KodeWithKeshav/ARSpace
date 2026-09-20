@@ -59,6 +59,14 @@ namespace ARSpace.AR
                 if (m_Reticle == null)
                     m_Reticle = FindFirstObjectByType<PlacementReticle>();
             }
+
+            // Ensure companion systems exist in the scene even if running an older scene
+            if (FindFirstObjectByType<PlacementPreview>() == null)
+                gameObject.AddComponent<PlacementPreview>();
+            if (FindFirstObjectByType<SnapToObjectEdge>() == null)
+                gameObject.AddComponent<SnapToObjectEdge>();
+            if (FindFirstObjectByType<RotationGizmo>() == null)
+                gameObject.AddComponent<RotationGizmo>();
         }
 
         void Update()
@@ -179,6 +187,9 @@ namespace ARSpace.AR
                 placedObj.SnapBaseToHeight(targetPose.position.y);
 
                 placedObj.SetFloorWorldY(targetPose.position.y);
+
+                // Initialize drift rejection at the exact placed position
+                placedObj.SetIntendedPose();
 
                 // 5. Register in PlacedObjectRegistry and fire GameEvents.ObjectPlaced
                 GameEvents.RaiseObjectPlaced(instance);

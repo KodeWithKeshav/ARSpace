@@ -26,6 +26,15 @@ namespace ARSpace.Placement
         [SerializeField]
         LayerMask m_ObstacleLayerMask = ~0;
 
+        [Header("Drag Smoothing")]
+        [Tooltip("Exponential smoothing factor for drag position (lower = smoother).")]
+        [SerializeField, Range(0.05f, 1f)]
+        float m_DragSmoothFactor = 0.35f;
+
+        [Tooltip("Maximum drag velocity in metres per second. Prevents objects shooting off.")]
+        [SerializeField]
+        float m_MaxDragSpeed = 2.0f;
+
         ARRaycastManager m_RaycastManager;
         AnchorService m_AnchorService;
         ObjectSelectionService m_SelectionService;
@@ -38,6 +47,8 @@ namespace ARSpace.Placement
         float m_InitialYaw;
         float m_InitialScale;
         bool m_IsDragging;
+        public bool IsDragging => m_IsDragging;
+        Vector3 m_SmoothedDragTarget; // low-pass filtered drag target
 
         void Awake()
         {
@@ -68,6 +79,8 @@ namespace ARSpace.Placement
             m_IsDragging = true;
             m_HasGrabOffset = false;
             m_DragFloorY = target.BaseWorldY;
+            m_SmoothedDragTarget = target.transform.position;
+            target.BeginManipulation();
         }
 
         public void OnDrag(Vector2 screenPosition)
@@ -100,8 +113,18 @@ namespace ARSpace.Placement
                 m_HasGrabOffset = true;
             }
 
-            Vector3 target = hitPoint + m_GrabOffset;
-            t.position = new Vector3(target.x, t.position.y, target.z);
+            Vector3 rawTarget = hitPoint + m_GrabOffset;
+
+            // Low-pass filter: smooth the target position to reject hand micro-tremors
+            m_SmoothedDragTarget = Vector3.Lerp(m_SmoothedDragTarget, rawTarget, m_DragSmoothFactor);
+
+            // Velocity clamp: prevent the object from shooting off if the finger jumps
+            Vector3 delta = new Vector3(m_SmoothedDragTarget.x - t.position.x, 0f, m_SmoothedDragTarget.z - t.position.z);
+            float maxDelta = m_MaxDragSpeed * Time.deltaTime;
+            if (delta.sqrMagnitude > maxDelta * maxDelta)
+                delta = delta.normalized * maxDelta;
+
+            t.position = new Vector3(t.position.x + delta.x, t.position.y, t.position.z + delta.z);
             m_ActiveObject.SnapBaseToHeight(m_DragFloorY);
 
             CheckCollisionFeedback(m_ActiveObject);
@@ -117,6 +140,9 @@ namespace ARSpace.Placement
             m_ActiveObject = null;
             obj.SetConflictTint(false);
 
+            // Snap Y back to floor to undo any vertical drift during drag
+            obj.SnapBaseToHeight(m_DragFloorY);
+
             if (m_AnchorService != null)
             {
                 Pose newPose = new Pose(obj.transform.position, obj.transform.rotation);
@@ -124,6 +150,10 @@ namespace ARSpace.Placement
                 if (obj != null)
                     obj.SnapBaseToHeight(m_DragFloorY);
             }
+
+            // End manipulation — re-enables drift rejection and records the new intended pose
+            if (obj != null)
+                obj.EndManipulation();
         }
 
         public void StartTwistAndPinch(PlacedObject target)
@@ -132,6 +162,7 @@ namespace ARSpace.Placement
             m_ActiveObject = target;
             m_InitialYaw = target.transform.eulerAngles.y;
             m_InitialScale = target.transform.localScale.x;
+            target.BeginManipulation();
         }
 
         public void OnTwistAndPinch(float angleDeltaDeg, float pinchRatio)
@@ -170,6 +201,8 @@ namespace ARSpace.Placement
 
         public void EndTwistAndPinch()
         {
+            if (m_ActiveObject != null)
+                m_ActiveObject.EndManipulation();
             m_ActiveObject = null;
         }
 

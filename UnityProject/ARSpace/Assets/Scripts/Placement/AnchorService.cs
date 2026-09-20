@@ -113,6 +113,7 @@ namespace ARSpace.Placement
             placedObj.transform.localRotation = Quaternion.identity;
 
             m_Anchors[placedObj] = anchor;
+            placedObj.SetIntendedPose();
             return anchor.transform;
         }
 

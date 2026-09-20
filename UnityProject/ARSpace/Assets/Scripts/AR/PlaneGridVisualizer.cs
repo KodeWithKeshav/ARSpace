@@ -81,8 +81,15 @@ namespace ARSpace.AR
             // Set up LineRenderer for crisp boundary outline
             SetupLineRenderer();
 
-            // Ensure shared material is applied without instantiation
-            if (m_SharedGridMaterial != null && m_MeshRenderer.sharedMaterial == null)
+            // Ensure shared material is applied without instantiation.
+            // If no material was assigned in the Inspector, create a runtime fallback
+            // so the plane never renders as a black slab.
+            if (m_SharedGridMaterial == null)
+            {
+                m_SharedGridMaterial = CreateFallbackGridMaterial();
+            }
+
+            if (m_MeshRenderer.sharedMaterial == null)
             {
                 m_MeshRenderer.sharedMaterial = m_SharedGridMaterial;
             }
@@ -304,6 +311,45 @@ namespace ARSpace.AR
                 if (m_LineRenderer != null)
                     m_LineRenderer.enabled = true;
             }
+        }
+
+        /// <summary>
+        /// Creates a simple semi-transparent grid material at runtime when no material asset
+        /// has been assigned. Prevents the black-slab appearance on detected planes.
+        /// </summary>
+        static Material s_FallbackMaterial;
+
+        static Material CreateFallbackGridMaterial()
+        {
+            if (s_FallbackMaterial != null)
+                return s_FallbackMaterial;
+
+            // Try URP Lit first, fall back to Standard
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null)
+                shader = Shader.Find("Standard");
+            if (shader == null)
+                shader = Shader.Find("Sprites/Default");
+
+            s_FallbackMaterial = new Material(shader)
+            {
+                name = "FallbackPlaneGrid",
+                color = new Color(1f, 0.55f, 0.1f, 0.12f) // subtle orange tint
+            };
+
+            // Enable transparency
+            s_FallbackMaterial.SetFloat("_Surface", 1f); // Transparent
+            s_FallbackMaterial.SetFloat("_Blend", 0f);   // Alpha blend
+            s_FallbackMaterial.SetFloat("_AlphaClip", 0f);
+            s_FallbackMaterial.SetOverrideTag("RenderType", "Transparent");
+            s_FallbackMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            s_FallbackMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            s_FallbackMaterial.SetInt("_ZWrite", 0);
+            s_FallbackMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            s_FallbackMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            s_FallbackMaterial.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+
+            return s_FallbackMaterial;
         }
     }
 }
